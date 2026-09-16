@@ -1,0 +1,33 @@
+﻿import 'package:equatable/equatable.dart';
+import 'sale_item.dart';
+
+enum SaleStatus { pending, completed, voided }
+
+class Sale extends Equatable {
+  final String id;
+  final List<SaleItem> items;
+  final double discount;
+  final double tax;
+  final DateTime createdAt;
+  final SaleStatus status;
+  final String? promoterId;
+  final String? notes;
+
+  const Sale({
+    required this.id,
+    required this.items,
+    required this.createdAt,
+    this.discount  = 0,
+    this.tax       = 0,
+    this.status    = SaleStatus.pending,
+    this.promoterId,
+    this.notes,
+  });
+
+  double get subtotal => items.fold(0, (s, i) => s + i.lineTotal);
+  double get total    => subtotal - discount + tax;
+
+  @override
+  List<Object?> get props =>
+      [id, items, discount, tax, createdAt, status, promoterId];
+}
