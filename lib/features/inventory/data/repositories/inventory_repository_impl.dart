@@ -5,7 +5,9 @@ import '../datasources/inventory_local_data_source.dart';
 import '../models/lot_model.dart';
 import '../models/product_model.dart';
 import 'package:dartz/dartz.dart';
-import '../../../../core/error/failures.dart'; // Assuming a standard core/error structure
+import '../../../../core/errors/failures.dart';
+import '../../domain/entities/inventory_batch.dart';
+import '../models/inventory_batch_model.dart';
 
 class InventoryRepositoryImpl implements InventoryRepository {
   final InventoryLocalDataSource localDataSource;
@@ -45,5 +47,50 @@ class InventoryRepositoryImpl implements InventoryRepository {
   @override
   Future<List<Product>> getActiveInventory() async {
     return await localDataSource.getActiveInventory();
+  }
+
+  @override
+  Future<Either<Failure, Unit>> addBatch(InventoryBatch batch) async {
+    try {
+      final model = InventoryBatchModel(
+        id: batch.id,
+        productId: batch.productId,
+        quantity: batch.quantity,
+        costPrice: batch.costPrice,
+        receivedAt: batch.receivedAt,
+      );
+      await localDataSource.addBatch(model);
+      return const Right(unit);
+    } catch (e) {
+      return Left(DatabaseFailure('Error adding batch: \$e'));
+    }
+  }
+
+  @override
+  Future<Either<Failure, List<InventoryBatch>>> consumeStock(String productId, int quantity) async {
+    try {
+      final models = await localDataSource.consumeStock(productId, quantity);
+      final entities = models.map((m) => InventoryBatch(
+        id: m.id,
+        productId: m.productId,
+        quantity: m.quantity,
+        costPrice: m.costPrice,
+        receivedAt: m.receivedAt,
+      )).toList();
+      return Right(entities);
+    } catch (e) {
+      return Left(DatabaseFailure('Error consuming stock: \$e'));
+    }
+  }
+
+  @override
+  Future<Either<Failure, List<Product>>> getAllProducts() async {
+    try {
+      final models = await localDataSource.getAllProducts();
+      final products = models.map<Product>((m) => m).toList();
+      return Right(products);
+    } catch (e) {
+      return Left(DatabaseFailure('Error getting products: \$e'));
+    }
   }
 }

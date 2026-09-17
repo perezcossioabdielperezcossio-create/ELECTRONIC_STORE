@@ -37,7 +37,8 @@ void main() {
         sku: 'SKU1',
         name: 'Product 1',
         category: 'Category',
-        sellingPrice: 200.0,
+        standardSellingPrice: 200.0,
+        brand: 'Brand',
         minStockThreshold: 5,
         lots: [lot1, lot2Inactive, lot3],
       );
@@ -53,7 +54,8 @@ void main() {
         sku: 'SKU1',
         name: 'Product 1',
         category: 'Category',
-        sellingPrice: 200.0,
+        standardSellingPrice: 200.0,
+        brand: 'Brand',
         minStockThreshold: 5,
         lots: [lot2Inactive], // 0 active stock
       );
@@ -65,7 +67,8 @@ void main() {
         sku: 'SKU1',
         name: 'Product 1',
         category: 'Category',
-        sellingPrice: 200.0,
+        standardSellingPrice: 200.0,
+        brand: 'Brand',
         minStockThreshold: 10,
         lots: [lot1], // 10 active stock, threshold is 10
       );
@@ -77,7 +80,8 @@ void main() {
         sku: 'SKU1',
         name: 'Product 1',
         category: 'Category',
-        sellingPrice: 200.0,
+        standardSellingPrice: 200.0,
+        brand: 'Brand',
         minStockThreshold: 5,
         lots: [lot1], // 10 active stock, threshold is 5
       );
@@ -90,7 +94,8 @@ void main() {
         sku: 'SKU1',
         name: 'Product 1',
         category: 'Category',
-        sellingPrice: 200.0,
+        standardSellingPrice: 200.0,
+        brand: 'Brand',
         minStockThreshold: 5,
         lots: [lot1, lot2Inactive, lot3],
       );

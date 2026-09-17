@@ -1,11 +1,11 @@
-﻿import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart';
 import '../../domain/entities/promoter.dart';
 import '../../domain/usecases/get_all_promoters.dart';
 import '../../../../core/usecases/usecase.dart';
 
 class PromotersViewModel extends ChangeNotifier {
-  final GetAllPromoters _getAll;
-  PromotersViewModel({required GetAllPromoters getAll}) : _getAll = getAll;
+  final GetAllPromoters getAll;
+  PromotersViewModel({required this.getAll});
 
   List<Promoter> _promoters = [];
   bool _isLoading = false;
@@ -17,7 +17,7 @@ class PromotersViewModel extends ChangeNotifier {
 
   Future<void> load() async {
     _isLoading = true; notifyListeners();
-    final result = await _getAll(const NoParams());
+    final result = await getAll(const NoParams());
     result.fold(
       (f) { _error = f.message; },
       (list) { _promoters = list; _error = null; },
