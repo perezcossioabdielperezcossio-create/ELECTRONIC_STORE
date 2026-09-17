@@ -1,7 +1,8 @@
-﻿import '../../../../data/local/database_helper.dart';
+import '../../../../data/local/database_helper.dart';
 import '../../../../core/errors/exceptions.dart';
 import '../models/product_model.dart';
 import '../models/inventory_batch_model.dart';
+import 'package:sqflite/sqflite.dart';
 
 abstract class InventoryLocalDatasource {
   Future<List<ProductModel>>        getAllProducts();
@@ -89,6 +90,3 @@ class InventoryLocalDatasourceImpl implements InventoryLocalDatasource {
     return consumed;
   }
 }
-
-// Sqflite import needed inside the file
-import 'package:sqflite/sqflite.dart';

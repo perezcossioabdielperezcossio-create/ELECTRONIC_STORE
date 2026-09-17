@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../../domain/entities/promoter.dart';
 
 class PromoterTile extends StatelessWidget {
@@ -11,7 +11,7 @@ class PromoterTile extends StatelessWidget {
       leading: const CircleAvatar(child: Icon(Icons.person)),
       title:    Text(promoter.name),
       subtitle: Text(promoter.phone),
-      trailing: Chip(label: Text('\%')),
+      trailing: const Chip(label: Text('%')),
     );
   }
 }

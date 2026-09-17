@@ -1,5 +1,8 @@
+import 'package:dartz/dartz.dart';
+import '../../../../core/errors/failures.dart';
 import '../entities/lot.dart';
 import '../entities/product.dart';
+import '../entities/inventory_batch.dart';
 
 /// Abstract repository defining domain operations for inventory.
 abstract class InventoryRepository {
@@ -20,4 +23,8 @@ abstract class InventoryRepository {
 
   /// Retrieves all products that are considered part of the active inventory.
   Future<List<Product>> getActiveInventory();
+
+  Future<Either<Failure, List<Product>>> getAllProducts();
+  Future<Either<Failure, Unit>> addBatch(InventoryBatch batch);
+  Future<Either<Failure, List<InventoryBatch>>> consumeStock(String productId, int quantity);
 }

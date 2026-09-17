@@ -32,6 +32,12 @@ Utilizamos este archivo para llevar un registro del progreso del desarrollo.
   - Se implementaron las entidades `Product` y `Lot` para el control de inventario por lotes independientes. Se incluye lógica de negocio encapsulada para el cálculo de stock activo (`availableStock`), estado del stock (`StockStatus`), costo real y capital inmovilizado. Interfaz abstracta `InventoryRepository` definida.
   - Se implementó el caso de uso `CreateProductWithLotUseCase` que valida la unicidad del SKU (lanza `DuplicateSkuException` si ya existe) y verifica cantidad inicial / costo (RF-01 y RF-02).
   - Todo el código es Dart puro siguiendo Clean Architecture.
+- **[KAN-8] Módulo POS (Ventas y FIFO):** 
+  - Se implementó la lógica de venta transaccional en `PosLocalDatasourceImpl.processSale` con soporte para base de datos local SQLite.
+  - Se desarrolló el **Algoritmo FIFO en cascada** (RF-09, RF-11) capaz de consumir el stock de los lotes más antiguos de manera secuencial hasta completar la cantidad requerida en la venta.
+  - Se implementó la **Regla Anti-Pérdida (RF-08)** para asegurar que el precio neto de venta no sea menor al costo real de adquisición (`realUnitCost`) del lote que se despacha, bloqueando la transacción si es necesario (`AntiLossException`).
+  - Se implementó la validación estricta de stock disponible (RF-07).
+  - Se incluyeron pruebas unitarias con `sqflite_common_ffi` en memoria para validar la integridad del motor de ventas.
 
 ### Fase 1: Arquitectura Base y Modelado (✅ Completado)
 - [x] Crear estructura de carpetas (Clean Architecture + Feature First).

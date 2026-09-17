@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import '../../domain/entities/product.dart';
 
 class ProductCard extends StatelessWidget {
@@ -12,9 +12,9 @@ class ProductCard extends StatelessWidget {
       child: ListTile(
         leading: CircleAvatar(child: Text(product.name[0])),
         title:   Text(product.name),
-        subtitle: Text('SKU: \ · \'),
+        subtitle: Text('SKU: ${product.sku} · Stock: ${product.availableStock}'),
         trailing: Text(
-          'RD\$ \',
+          'RD\$ ${product.latestCost?.toStringAsFixed(2) ?? '0.00'}',
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
       ),

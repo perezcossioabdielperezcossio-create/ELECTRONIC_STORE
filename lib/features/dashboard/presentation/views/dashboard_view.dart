@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../viewmodels/dashboard_viewmodel.dart';
 import '../widgets/summary_card.dart';
@@ -22,7 +22,7 @@ class _DashboardViewState extends State<DashboardView> {
     return Scaffold(
       appBar: AppBar(title: const Text('Dashboard')),
       body: Consumer<DashboardViewModel>(
-        builder: (_, vm, __) {
+        builder: (_, vm, _) {
           if (vm.isLoading) return const Center(child: CircularProgressIndicator());
           if (vm.error != null) return Center(child: Text(vm.error!));
           final s = vm.summary;
@@ -33,10 +33,10 @@ class _DashboardViewState extends State<DashboardView> {
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
             children: [
-              SummaryCard(title: 'Ventas Hoy',       value: 'RD\$ \', icon: Icons.point_of_sale),
-              SummaryCard(title: 'Transacciones',     value: '\',                    icon: Icons.receipt_long),
-              SummaryCard(title: 'Stock Bajo',        value: '\ productos',            icon: Icons.warning_amber, isAlert: s.lowStockCount > 0),
-              SummaryCard(title: 'Comisiones Pend.',  value: 'RD\$ \', icon: Icons.people),
+              SummaryCard(title: 'Ventas Hoy',        value: 'RD\$ ${s.todaySales.toStringAsFixed(2)}', icon: Icons.point_of_sale),
+              SummaryCard(title: 'Transacciones',     value: '${s.transactionCount}', icon: Icons.receipt_long),
+              SummaryCard(title: 'Stock Bajo',        value: '${s.lowStockCount} productos', icon: Icons.warning_amber, isAlert: s.lowStockCount > 0),
+              SummaryCard(title: 'Comisiones Pend.',  value: 'RD\$ ${s.pendingCommissions.toStringAsFixed(2)}', icon: Icons.people),
             ],
           );
         },

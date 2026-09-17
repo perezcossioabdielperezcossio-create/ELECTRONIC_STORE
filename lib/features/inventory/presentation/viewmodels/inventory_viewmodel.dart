@@ -1,4 +1,4 @@
-﻿import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart';
 import '../../domain/entities/inventory_batch.dart';
 import '../../domain/entities/product.dart';
 import '../../domain/usecases/get_all_products.dart';
@@ -9,17 +9,15 @@ import '../../../../core/usecases/usecase.dart';
 enum ViewState { idle, loading, error }
 
 class InventoryViewModel extends ChangeNotifier {
-  final GetAllProducts    _getAllProducts;
-  final AddInventoryBatch _addBatch;
-  final ConsumeStockFifo  _consumeStock;
+  final GetAllProducts    getAllProducts;
+  final AddInventoryBatch addBatchUsecase;
+  final ConsumeStockFifo  consumeStockUsecase;
 
   InventoryViewModel({
-    required GetAllProducts getAllProducts,
-    required AddInventoryBatch addBatch,
-    required ConsumeStockFifo consumeStock,
-  })  : _getAllProducts = getAllProducts,
-        _addBatch      = addBatch,
-        _consumeStock  = consumeStock;
+    required this.getAllProducts,
+    required this.addBatchUsecase,
+    required this.consumeStockUsecase,
+  });
 
   ViewState           _state    = ViewState.idle;
   List<Product>       _products = [];
@@ -33,7 +31,7 @@ class InventoryViewModel extends ChangeNotifier {
     _state = ViewState.loading;
     notifyListeners();
 
-    final result = await _getAllProducts(const NoParams());
+    final result = await getAllProducts(const NoParams());
     result.fold(
       (failure) {
         _state        = ViewState.error;
@@ -48,12 +46,12 @@ class InventoryViewModel extends ChangeNotifier {
   }
 
   Future<bool> addBatch(InventoryBatch batch) async {
-    final result = await _addBatch(AddBatchParams(batch));
+    final result = await addBatchUsecase(AddBatchParams(batch));
     return result.isRight();
   }
 
   Future<bool> consumeStock(String productId, int quantity) async {
-    final result = await _consumeStock(
+    final result = await consumeStockUsecase(
         ConsumeStockParams(productId: productId, quantity: quantity));
     return result.isRight();
   }

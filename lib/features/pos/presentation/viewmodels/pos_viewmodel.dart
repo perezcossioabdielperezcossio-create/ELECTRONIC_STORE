@@ -1,19 +1,16 @@
-﻿import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../../domain/entities/sale.dart';
 import '../../domain/entities/sale_item.dart';
 import '../../domain/usecases/create_sale.dart';
-import '../../domain/usecases/get_sales_by_date.dart';
+
 
 class PosViewModel extends ChangeNotifier {
-  final CreateSale     _createSale;
-  final GetSalesByDate _getSalesByDate;
+  final CreateSale     createSale;
 
   PosViewModel({
-    required CreateSale createSale,
-    required GetSalesByDate getSalesByDate,
-  })  : _createSale     = createSale,
-        _getSalesByDate = getSalesByDate;
+    required this.createSale,
+  });
 
   final List<SaleItem> _cart = [];
   bool _isLoading = false;
@@ -63,7 +60,7 @@ class PosViewModel extends ChangeNotifier {
       promoterId: promoterId,
     );
 
-    final result = await _createSale(CreateSaleParams(sale));
+    final result = await createSale(CreateSaleParams(sale));
     _isLoading = false;
 
     result.fold(
