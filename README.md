@@ -27,6 +27,12 @@ El proyecto está organizado por características (features) para mantener la mo
 
 Utilizamos este archivo para llevar un registro del progreso del desarrollo.
 
+### Registro de Cambios Recientes / Contexto Actual
+- **[KAN-5] Módulo Inventory (Domain Layer):** 
+  - Se implementaron las entidades `Product` y `Lot` para el control de inventario por lotes independientes. Se incluye lógica de negocio encapsulada para el cálculo de stock activo (`availableStock`), estado del stock (`StockStatus`), costo real y capital inmovilizado. Interfaz abstracta `InventoryRepository` definida.
+  - Se implementó el caso de uso `CreateProductWithLotUseCase` que valida la unicidad del SKU (lanza `DuplicateSkuException` si ya existe) y verifica cantidad inicial / costo (RF-01 y RF-02).
+  - Todo el código es Dart puro siguiendo Clean Architecture.
+
 ### Fase 1: Arquitectura Base y Modelado (✅ Completado)
 - [x] Crear estructura de carpetas (Clean Architecture + Feature First).
 - [x] Definir entidades de dominio (`Product`, `InventoryBatch`, `Sale`, `Promoter`, `Commission`).
