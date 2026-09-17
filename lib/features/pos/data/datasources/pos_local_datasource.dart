@@ -1,4 +1,4 @@
-import '../../../../data/local/database_helper.dart';
+import '../../../../core/database/database_helper.dart';
 import '../models/sale_model.dart';
 import '../../../../core/errors/exceptions.dart';
 

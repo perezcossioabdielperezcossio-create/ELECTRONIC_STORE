@@ -1,4 +1,4 @@
-﻿import '../../../../data/local/database_helper.dart';
+import '../../../../core/database/database_helper.dart';
 import '../models/promoter_model.dart';
 
 abstract class PromoterLocalDatasource {

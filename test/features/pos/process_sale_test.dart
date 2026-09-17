@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:electronic_store/data/local/database_helper.dart';
+import 'package:electronic_store/core/database/database_helper.dart';
 import 'package:electronic_store/features/pos/data/datasources/pos_local_datasource.dart';
 import 'package:electronic_store/features/pos/data/models/sale_model.dart';
 import 'package:electronic_store/features/pos/domain/entities/sale_item.dart';
@@ -28,12 +28,20 @@ void main() {
         await db.execute('''
           CREATE TABLE sales(
             id TEXT PRIMARY KEY,
-            created_at TEXT,
-            discount REAL,
-            tax REAL,
-            status TEXT,
+            created_at TEXT DEFAULT (datetime('now')),
+            payment_method TEXT NOT NULL,
+            delivery_method TEXT NOT NULL,
+            delivery_fee REAL DEFAULT 0.0,
+            discount REAL DEFAULT 0.0,
+            tax REAL DEFAULT 0.0,
+            total REAL NOT NULL,
+            status TEXT DEFAULT 'pending',
+            customer_name TEXT,
+            customer_phone TEXT,
             promoter_id TEXT,
-            notes TEXT
+            notes TEXT,
+            is_locked INTEGER DEFAULT 0,
+            FOREIGN KEY (promoter_id) REFERENCES promoters(id)
           )
         ''');
         await db.execute('''
