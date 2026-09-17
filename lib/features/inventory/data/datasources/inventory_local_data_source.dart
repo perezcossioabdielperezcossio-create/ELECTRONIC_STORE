@@ -1,12 +1,17 @@
 import 'package:sqflite/sqflite.dart';
 import '../models/lot_model.dart';
 import '../models/product_model.dart';
+import '../models/inventory_batch_model.dart';
 
 abstract class InventoryLocalDataSource {
   Future<void> saveProductWithInitialLot(ProductModel product, LotModel initialLot);
   Future<void> addLotToProduct(String productId, LotModel lot);
   Future<ProductModel?> getProductBySku(String sku);
   Future<List<ProductModel>> getActiveInventory();
+
+  Future<void> addBatch(InventoryBatchModel batch);
+  Future<List<InventoryBatchModel>> consumeStock(String productId, int quantity);
+  Future<List<ProductModel>> getAllProducts();
 }
 
 class InventoryLocalDataSourceImpl implements InventoryLocalDataSource {
@@ -83,5 +88,45 @@ class InventoryLocalDataSourceImpl implements InventoryLocalDataSource {
     }
     
     return inventory;
+  }
+
+  @override
+  Future<List<ProductModel>> getAllProducts() async {
+    final maps = await database.query('products', where: 'is_active = 1');
+    return maps.map((m) => ProductModel.fromMap(m)).toList();
+  }
+
+  @override
+  Future<void> addBatch(InventoryBatchModel model) async {
+    await database.insert('inventory_batches', model.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  @override
+  Future<List<InventoryBatchModel>> consumeStock(String productId, int quantity) async {
+    final maps = await database.query(
+      'inventory_batches',
+      where: 'product_id = ? AND quantity > 0',
+      whereArgs: [productId],
+      orderBy: 'received_at ASC',
+    );
+    final batches = maps.map((m) => InventoryBatchModel.fromMap(m)).toList();
+    final consumed = <InventoryBatchModel>[];
+    var remaining = quantity;
+
+    for (final batch in batches) {
+      if (remaining <= 0) break;
+      final take = batch.quantity < remaining ? batch.quantity : remaining;
+      await database.update(
+        'inventory_batches',
+        {'quantity': batch.quantity - take},
+        where: 'id = ?', whereArgs: [batch.id],
+      );
+      consumed.add(batch);
+      remaining -= take;
+    }
+
+    if (remaining > 0) throw Exception('Stock insuficiente');
+    return consumed;
   }
 }

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../viewmodels/promoters_viewmodel.dart';
 import '../widgets/promoter_tile.dart';
@@ -22,7 +22,7 @@ class _PromotersViewState extends State<PromotersView> {
     return Scaffold(
       appBar: AppBar(title: const Text('Promotores')),
       body: Consumer<PromotersViewModel>(
-        builder: (_, vm, __) {
+        builder: (context, vm, _) {
           if (vm.isLoading) return const Center(child: CircularProgressIndicator());
           if (vm.error != null) return Center(child: Text(vm.error!));
           return ListView.builder(

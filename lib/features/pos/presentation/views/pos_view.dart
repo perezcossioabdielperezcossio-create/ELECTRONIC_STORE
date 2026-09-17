@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../viewmodels/pos_viewmodel.dart';
 import '../widgets/cart_item_tile.dart';
@@ -41,13 +41,13 @@ class _OrderSummary extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceVariant,
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Total: RD\$ \',
+          Text('Total: RD\$ ${vm.cartTotal}',
               style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 12),
           FilledButton(

@@ -28,10 +28,18 @@ El proyecto está organizado por características (features) para mantener la mo
 Utilizamos este archivo para llevar un registro del progreso del desarrollo.
 
 ### Registro de Cambios Recientes / Contexto Actual
+- **[KAN-4] Módulo Inventory (Presentation Layer):**
+  - Implementación del `InventoryViewModel` con soporte para filtrado (por texto y por estado de reposición) usando un getter reactivo `filteredProducts`.
+  - Creación del componente semafórico reutilizable `StockStatusBadge` para reflejar visualmente el estado del stock (Disponible, Stock Bajo, Agotado).
+  - Creación de la pantalla `InventoryCatalogScreen` con una barra superior de búsqueda/filtros y una lista de tarjetas expandibles (`ExpansionTile`) para visualizar los detalles de cada producto y sus lotes activos. Integración nativa con `ListenableBuilder` para actualizar la interfaz.
 - **[KAN-5] Módulo Inventory (Domain Layer):** 
   - Se implementaron las entidades `Product` y `Lot` para el control de inventario por lotes independientes. Se incluye lógica de negocio encapsulada para el cálculo de stock activo (`availableStock`), estado del stock (`StockStatus`), costo real y capital inmovilizado. Interfaz abstracta `InventoryRepository` definida.
   - Se implementó el caso de uso `CreateProductWithLotUseCase` que valida la unicidad del SKU (lanza `DuplicateSkuException` si ya existe) y verifica cantidad inicial / costo (RF-01 y RF-02).
   - Todo el código es Dart puro siguiendo Clean Architecture.
+- **[Fixes] Refactorización y estabilización (flutter analyze):**
+  - Corrección de errores de sintaxis, strings truncados e interpolaciones rotas en las capas de presentación (Inventory, Dashboard, POS).
+  - Alineación de interfaces del repositorio de inventario (`InventoryLocalDataSource`), implementando mapeos a `Either` (`dartz`) y conectando correctamente los modelos locales con las entidades de dominio.
+  - Resolución integral de lints (super parámetros, variables no utilizadas y propiedades deprecadas) en ViewModels y pantallas.
 
 ### Fase 1: Arquitectura Base y Modelado (✅ Completado)
 - [x] Crear estructura de carpetas (Clean Architecture + Feature First).

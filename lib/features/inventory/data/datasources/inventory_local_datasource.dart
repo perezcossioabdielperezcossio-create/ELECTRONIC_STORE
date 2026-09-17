@@ -1,4 +1,5 @@
-﻿import '../../../../data/local/database_helper.dart';
+import 'package:sqflite/sqflite.dart';
+import '../../../../data/local/database_helper.dart';
 import '../../../../core/errors/exceptions.dart';
 import '../models/product_model.dart';
 import '../models/inventory_batch_model.dart';
@@ -90,5 +91,3 @@ class InventoryLocalDatasourceImpl implements InventoryLocalDatasource {
   }
 }
 
-// Sqflite import needed inside the file
-import 'package:sqflite/sqflite.dart';
