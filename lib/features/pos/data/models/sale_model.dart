@@ -29,11 +29,11 @@ class SaleModel extends Sale {
         status:     SaleStatus.values.byName(map['status'] as String),
         promoterId:     map['promoter_id'] as String?,
         notes:          map['notes'] as String?,
-        paymentMethod:  map['metodo_pago'] as String? ?? 'EFECTIVO',
-        deliveryMethod: map['modalidad_entrega'] as String? ?? 'TIENDA',
-        deliveryFee:    (map['costo_flete'] as num?)?.toDouble() ?? 0.0,
-        customerName:   map['cliente_nombre'] as String?,
-        customerPhone:  map['cliente_telefono'] as String?,
+        paymentMethod:  map['payment_method'] as String? ?? 'EFECTIVO',
+        deliveryMethod: map['delivery_method'] as String? ?? 'TIENDA',
+        deliveryFee:    (map['delivery_fee'] as num?)?.toDouble() ?? 0.0,
+        customerName:   map['customer_name'] as String?,
+        customerPhone:  map['customer_phone'] as String?,
       );
 
   Map<String, dynamic> toMap() => {
@@ -44,12 +44,11 @@ class SaleModel extends Sale {
         'status':      status.name,
         'promoter_id':       promoterId,
         'notes':             notes,
-        'metodo_pago':       paymentMethod,
-        'modalidad_entrega': deliveryMethod,
-        'costo_flete':       deliveryFee,
-        'cliente_nombre':    customerName,
-        'cliente_telefono':  customerPhone,
-        'total_cobrado':     total, // required by schema
-        'ganancia_neta':     0.0, // Should be calculated, setting 0.0 for now
+        'payment_method':    paymentMethod,
+        'delivery_method':   deliveryMethod,
+        'delivery_fee':      deliveryFee,
+        'customer_name':     customerName,
+        'customer_phone':    customerPhone,
+        'total':             total,
       };
 }

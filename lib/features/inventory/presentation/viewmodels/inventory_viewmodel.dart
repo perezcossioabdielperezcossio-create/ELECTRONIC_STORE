@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import '../../domain/entities/inventory_batch.dart';
+import '../../domain/entities/lot.dart';
 import '../../domain/entities/product.dart';
 import '../../domain/usecases/get_all_products.dart';
 import '../../domain/usecases/add_inventory_batch.dart';
@@ -10,12 +10,12 @@ enum ViewState { idle, loading, error }
 
 class InventoryViewModel extends ChangeNotifier {
   final GetAllProducts    getAllProductsUseCase;
-  final AddInventoryBatch addBatchUseCase;
+  final AddLotUseCase addLotUseCase;
   final ConsumeStockFifo  consumeStockUseCase;
 
   InventoryViewModel({
     required this.getAllProductsUseCase,
-    required this.addBatchUseCase,
+    required this.addLotUseCase,
     required this.consumeStockUseCase,
   });
 
@@ -74,8 +74,8 @@ class InventoryViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> addBatch(InventoryBatch batch) async {
-    final result = await addBatchUseCase(AddBatchParams(batch));
+  Future<bool> addLot(String productId, Lot lot) async {
+    final result = await addLotUseCase(AddLotParams(productId: productId, lot: lot));
     return result.isRight();
   }
 

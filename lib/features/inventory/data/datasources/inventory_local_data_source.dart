@@ -1,7 +1,7 @@
 import 'package:sqflite/sqflite.dart';
 import '../models/lot_model.dart';
 import '../models/product_model.dart';
-import '../models/inventory_batch_model.dart';
+
 
 abstract class InventoryLocalDataSource {
   Future<void> saveProductWithInitialLot(ProductModel product, LotModel initialLot);
@@ -9,8 +9,7 @@ abstract class InventoryLocalDataSource {
   Future<ProductModel?> getProductBySku(String sku);
   Future<List<ProductModel>> getActiveInventory();
 
-  Future<void> addBatch(InventoryBatchModel batch);
-  Future<List<InventoryBatchModel>> consumeStock(String productId, int quantity);
+  Future<List<LotModel>> consumeStock(String productId, int quantity);
   Future<List<ProductModel>> getAllProducts();
 }
 
@@ -97,32 +96,26 @@ class InventoryLocalDataSourceImpl implements InventoryLocalDataSource {
   }
 
   @override
-  Future<void> addBatch(InventoryBatchModel model) async {
-    await database.insert('inventory_batches', model.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.replace);
-  }
-
-  @override
-  Future<List<InventoryBatchModel>> consumeStock(String productId, int quantity) async {
+  Future<List<LotModel>> consumeStock(String productId, int quantity) async {
     final maps = await database.query(
-      'inventory_batches',
-      where: 'product_id = ? AND quantity > 0',
+      'lots',
+      where: 'product_id = ? AND current_quantity > 0',
       whereArgs: [productId],
-      orderBy: 'received_at ASC',
+      orderBy: 'purchase_date ASC',
     );
-    final batches = maps.map((m) => InventoryBatchModel.fromMap(m)).toList();
-    final consumed = <InventoryBatchModel>[];
+    final lots = maps.map((m) => LotModel.fromMap(m)).toList();
+    final consumed = <LotModel>[];
     var remaining = quantity;
 
-    for (final batch in batches) {
+    for (final lot in lots) {
       if (remaining <= 0) break;
-      final take = batch.quantity < remaining ? batch.quantity : remaining;
+      final take = lot.currentQuantity < remaining ? lot.currentQuantity : remaining;
       await database.update(
-        'inventory_batches',
-        {'quantity': batch.quantity - take},
-        where: 'id = ?', whereArgs: [batch.id],
+        'lots',
+        {'current_quantity': lot.currentQuantity - take},
+        where: 'id = ?', whereArgs: [lot.id],
       );
-      consumed.add(batch);
+      consumed.add(lot);
       remaining -= take;
     }
 

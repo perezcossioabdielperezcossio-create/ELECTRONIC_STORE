@@ -44,6 +44,10 @@ Utilizamos este archivo para llevar un registro del progreso del desarrollo.
   - Implementación reactiva de `PosViewModel` con buscador dinámico por SKU/Nombre, validaciones de stock físico disponible y bloqueos preventivos anti-pérdida (protección de costo de adquisición).
   - Rediseño de la interfaz (`PosView`) 100% Mobile-First, utilizando `BottomSheet` para gestión de carrito, teclados numéricos contextuales y selectores rápidos.
   - Actualización de la entidad `Sale` y `SaleModel` para estructurar y persistir métodos de pago (Efectivo/Transferencia), envíos (Tienda/Delivery) y datos del cliente.
+- **[KAN-10] Inicialización de Base de Datos SQLite y Refactorización de Datasources:**
+  - Creación del esquema relacional DDL consolidado en `assets/sql/schema.sql` (con las tablas clave como `products`, `lots`, `sales`, `promoters`, etc. estandarizadas en inglés).
+  - Desarrollo de un `DatabaseHelper` transaccional que lee e inicializa la base de datos local activando las llaves foráneas (`PRAGMA foreign_keys = ON`).
+  - Refactorización de la capa de datos de Inventario, migrando modelos deprecados (`InventoryBatchModel`) a la entidad `LotModel` para asegurar alineación con la tabla `lots` en SQLite. Todos los Datasources locales han sido conectados de forma segura.
 
 ### Fase 1: Arquitectura Base y Modelado (✅ Completado)
 - [x] Crear estructura de carpetas (Clean Architecture + Feature First).
@@ -55,8 +59,8 @@ Utilizamos este archivo para llevar un registro del progreso del desarrollo.
 - [x] Plantillas de Vistas (Views) y Widgets.
 
 ### Fase 2: Implementación de Base de Datos y Persistencia (🚧 En Progreso)
-- [ ] Configurar inicialización real de SQLite (`schema.sql`).
-- [ ] Conectar Repositories con la UI para operaciones CRUD locales reales.
+- [x] Configurar inicialización real de SQLite (`schema.sql`).
+- [x] Conectar Repositories con la UI para operaciones CRUD locales reales.
 - [ ] Tests de acceso a datos locales.
 
 ### Fase 3: Interfaz de Usuario y Navegación (⏳ Pendiente)
