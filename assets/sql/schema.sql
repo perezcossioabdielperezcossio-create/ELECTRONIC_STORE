@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS sale_items (
     product_name TEXT NOT NULL,
     quantity INTEGER NOT NULL,
     unit_price REAL NOT NULL,
+    unit_cost REAL DEFAULT 0.0,
     line_discount REAL DEFAULT 0.0,
     FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE,
     FOREIGN KEY (product_id) REFERENCES products(id)

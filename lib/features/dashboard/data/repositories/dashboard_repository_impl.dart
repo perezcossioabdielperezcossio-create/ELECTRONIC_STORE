@@ -1,20 +1,24 @@
-﻿import 'package:dartz/dartz.dart';
-import '../../../../core/errors/exceptions.dart';
-import '../../../../core/errors/failures.dart';
-import '../../domain/entities/dashboard_summary.dart';
+import '../models/financial_metrics_model.dart';
 import '../../domain/repositories/dashboard_repository.dart';
 import '../datasources/dashboard_local_datasource.dart';
 
 class DashboardRepositoryImpl implements DashboardRepository {
   final DashboardLocalDatasource localDatasource;
-  const DashboardRepositoryImpl(this.localDatasource);
+
+  DashboardRepositoryImpl(this.localDatasource);
 
   @override
-  Future<Either<Failure, DashboardSummary>> getSummary(DateTime date) async {
-    try {
-      return Right(await localDatasource.getSummary(date));
-    } on DatabaseException catch (e) {
-      return Left(DatabaseFailure(e.message));
-    }
+  Future<BalancePatrimonial> getBalancePatrimonial() async {
+    return await localDatasource.getBalancePatrimonial();
+  }
+
+  @override
+  Future<ArqueoDiario> getArqueoDiario({DateTime? date}) async {
+    return await localDatasource.getArqueoDiario(date: date);
+  }
+
+  @override
+  Future<List<MetricaCanal>> getMetricasCanal() async {
+    return await localDatasource.getMetricasCanal();
   }
 }

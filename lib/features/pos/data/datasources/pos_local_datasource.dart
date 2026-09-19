@@ -27,17 +27,9 @@ class PosLocalDatasourceImpl implements PosLocalDatasource {
       await txn.insert('sales', model.toMap());
       
       for (final item in model.items) {
-        await txn.insert('sale_items', {
-          'sale_id': model.id,
-          'product_id': item.productId,
-          'product_name': item.productName,
-          'quantity': item.quantity,
-          'unit_price': item.unitPrice,
-          'line_discount': item.lineDiscount,
-        });
-
         int remainingQuantity = item.quantity;
         final netUnitPrice = item.quantity > 0 ? (item.unitPrice - (item.lineDiscount / item.quantity)) : 0.0;
+        double totalCost = 0.0;
 
         final lotsMaps = await txn.query(
           'lots',
@@ -58,6 +50,7 @@ class PosLocalDatasourceImpl implements PosLocalDatasource {
           }
 
           final qtyToConsume = remainingQuantity <= currentQuantity ? remainingQuantity : currentQuantity;
+          totalCost += qtyToConsume * realUnitCost;
           
           await txn.update(
             'lots',
@@ -72,6 +65,19 @@ class PosLocalDatasourceImpl implements PosLocalDatasource {
         if (remainingQuantity > 0) {
           throw InsufficientStockException('Stock insuficiente para el producto ${item.productName}.');
         }
+
+        final averageUnitCost = item.quantity > 0 ? (totalCost / item.quantity) : 0.0;
+
+        await txn.insert('sale_items', {
+          'id': '${model.id}_${item.productId}',
+          'sale_id': model.id,
+          'product_id': item.productId,
+          'product_name': item.productName,
+          'quantity': item.quantity,
+          'unit_price': item.unitPrice,
+          'unit_cost': averageUnitCost,
+          'line_discount': item.lineDiscount,
+        });
       }
     });
   }
