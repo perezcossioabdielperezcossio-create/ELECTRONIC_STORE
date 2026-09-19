@@ -48,6 +48,11 @@ Utilizamos este archivo para llevar un registro del progreso del desarrollo.
   - Creación del esquema relacional DDL consolidado en `assets/sql/schema.sql` (con las tablas clave como `products`, `lots`, `sales`, `promoters`, etc. estandarizadas en inglés).
   - Desarrollo de un `DatabaseHelper` transaccional que lee e inicializa la base de datos local activando las llaves foráneas (`PRAGMA foreign_keys = ON`).
   - Refactorización de la capa de datos de Inventario, migrando modelos deprecados (`InventoryBatchModel`) a la entidad `LotModel` para asegurar alineación con la tabla `lots` en SQLite. Todos los Datasources locales han sido conectados de forma segura.
+- **[KAN-11] Dashboard Financiero, Arqueo de Caja y Métricas:**
+  - Actualización del esquema SQLite añadiendo `unit_cost` a `sale_items` para tracking histórico exacto del "Capital Base Recuperado" y "Ganancia Neta Real".
+  - Implementación completa de la capa de datos (Datasource y Repositorio local SQLite) con consultas agregadas (`SUM`, `JOINs` entre `lots`, `products`, `sales` y `sale_items`).
+  - Casos de Uso del dominio implementados para cálculo matemático del Balance Patrimonial, Utilidad por Canales y Conciliación Diaria (Efectivo vs Banco).
+  - UI de alta calidad desarrollada (`DashboardView`) e integrada con `DashboardViewModel` (ChangeNotifier) y soporte Pull-to-Refresh y selector de fecha. Pruebas unitarias SQLite In-Memory (`sqflite_common_ffi`) con 100% de éxito.
 
 ### Fase 1: Arquitectura Base y Modelado (✅ Completado)
 - [x] Crear estructura de carpetas (Clean Architecture + Feature First).
@@ -68,7 +73,7 @@ Utilizamos este archivo para llevar un registro del progreso del desarrollo.
 - [ ] UI final de Inventario (Listado, Creación de Productos).
 - [x] UI final del POS (Carrito, Selección de Productos, Checkout).
 - [ ] UI final de Promotores y Comisiones.
-- [ ] UI del Dashboard.
+- [x] UI del Dashboard.
 
 ### Fase 4: Sincronización y Backend (⏳ Pendiente)
 - [ ] Implementar lógica de `SyncManager` para enviar operaciones pendientes.
