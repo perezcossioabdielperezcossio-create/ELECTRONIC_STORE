@@ -16,6 +16,7 @@ class Product {
   final String category;
   final double standardSellingPrice;
   final int minStockThreshold;
+  final int activeReservedUnits;
   final List<Lot> lots;
 
   const Product({
@@ -26,6 +27,7 @@ class Product {
     required this.category,
     required this.standardSellingPrice,
     required this.minStockThreshold,
+    this.activeReservedUnits = 0,
     this.lots = const [],
   })  : assert(
           standardSellingPrice >= 0,
@@ -38,15 +40,16 @@ class Product {
 
   /// The total sum of remaining quantities from all active lots.
   int get availableStock {
-    return lots
+    final totalActiveLotStock = lots
         .where((lot) => lot.isActive)
         .fold(0, (sum, lot) => sum + lot.currentQuantity);
+    return totalActiveLotStock - activeReservedUnits;
   }
 
   /// The current status of the product based on available stock and threshold.
   StockStatus get status {
     final stock = availableStock;
-    if (stock == 0) {
+    if (stock <= 0) {
       return StockStatus.outOfStock;
     } else if (stock <= minStockThreshold) {
       return StockStatus.lowStock;
@@ -79,6 +82,7 @@ class Product {
     String? category,
     double? standardSellingPrice,
     int? minStockThreshold,
+    int? activeReservedUnits,
     List<Lot>? lots,
   }) {
     return Product(
@@ -89,6 +93,7 @@ class Product {
       category: category ?? this.category,
       standardSellingPrice: standardSellingPrice ?? this.standardSellingPrice,
       minStockThreshold: minStockThreshold ?? this.minStockThreshold,
+      activeReservedUnits: activeReservedUnits ?? this.activeReservedUnits,
       lots: lots ?? this.lots,
     );
   }

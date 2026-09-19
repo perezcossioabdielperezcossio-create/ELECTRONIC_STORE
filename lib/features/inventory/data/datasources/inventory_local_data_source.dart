@@ -45,12 +45,13 @@ class InventoryLocalDataSourceImpl implements InventoryLocalDataSource {
 
   @override
   Future<ProductModel?> getProductBySku(String sku) async {
-    final result = await database.query(
-      'products',
-      where: 'sku = ?',
-      whereArgs: [sku],
-      limit: 1,
-    );
+    final result = await database.rawQuery('''
+      SELECT p.*, COALESCE(SUM(r.quantity), 0) AS active_reserved_units
+      FROM products p
+      LEFT JOIN reservations r ON r.product_id = p.id AND r.status = 'ACTIVE'
+      WHERE p.sku = ?
+      GROUP BY p.id
+    ''', [sku]);
 
     if (result.isEmpty) return null;
 
@@ -65,12 +66,17 @@ class InventoryLocalDataSourceImpl implements InventoryLocalDataSource {
 
     final lots = lotsResult.map((lotMap) => LotModel.fromMap(lotMap)).toList();
 
-    return ProductModel.fromMap(productMap, lots: lots);
+    return ProductModel.fromMap(productMap, lots);
   }
 
   @override
   Future<List<ProductModel>> getActiveInventory() async {
-    final productsResult = await database.query('products');
+    final productsResult = await database.rawQuery('''
+      SELECT p.*, COALESCE(SUM(r.quantity), 0) AS active_reserved_units
+      FROM products p
+      LEFT JOIN reservations r ON r.product_id = p.id AND r.status = 'ACTIVE'
+      GROUP BY p.id
+    ''');
     final List<ProductModel> inventory = [];
 
     for (final productMap in productsResult) {
@@ -83,7 +89,7 @@ class InventoryLocalDataSourceImpl implements InventoryLocalDataSource {
       );
       
       final lots = lotsResult.map((lotMap) => LotModel.fromMap(lotMap)).toList();
-      inventory.add(ProductModel.fromMap(productMap, lots: lots));
+      inventory.add(ProductModel.fromMap(productMap, lots));
     }
     
     return inventory;
@@ -91,8 +97,29 @@ class InventoryLocalDataSourceImpl implements InventoryLocalDataSource {
 
   @override
   Future<List<ProductModel>> getAllProducts() async {
-    final maps = await database.query('products', where: 'is_active = 1');
-    return maps.map((m) => ProductModel.fromMap(m)).toList();
+    final productsResult = await database.rawQuery('''
+      SELECT p.*, COALESCE(SUM(r.quantity), 0) AS active_reserved_units
+      FROM products p
+      LEFT JOIN reservations r ON r.product_id = p.id AND r.status = 'ACTIVE'
+      WHERE p.is_active = 1
+      GROUP BY p.id
+    ''');
+    final List<ProductModel> inventory = [];
+
+    for (final productMap in productsResult) {
+      final productId = productMap['id'] as String;
+      
+      final lotsResult = await database.query(
+        'lots',
+        where: 'product_id = ? AND current_quantity > 0',
+        whereArgs: [productId],
+      );
+      
+      final lots = lotsResult.map((lotMap) => LotModel.fromMap(lotMap)).toList();
+      inventory.add(ProductModel.fromMap(productMap, lots));
+    }
+
+    return inventory;
   }
 
   @override

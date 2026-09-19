@@ -1,11 +1,13 @@
-﻿import 'package:dartz/dartz.dart';
+import 'package:dartz/dartz.dart';
 import '../../../../core/errors/exceptions.dart';
 import '../../../../core/errors/failures.dart';
 import '../../domain/entities/commission.dart';
 import '../../domain/entities/promoter.dart';
+import '../../domain/entities/reservation.dart';
 import '../../domain/repositories/promoter_repository.dart';
 import '../datasources/promoter_local_datasource.dart';
 import '../models/promoter_model.dart';
+import '../models/reservation_model.dart';
 
 class PromoterRepositoryImpl implements PromoterRepository {
   final PromoterLocalDatasource localDatasource;
@@ -62,5 +64,42 @@ class PromoterRepositoryImpl implements PromoterRepository {
   Future<Either<Failure, Unit>> markCommissionPaid(String commissionId) async {
     // TODO: implementar datasource de comisiones
     return const Right(unit);
+  }
+
+  @override
+  Future<Either<Failure, Unit>> createReservation(Reservation reservation) async {
+    try {
+      await localDatasource.createReservation(ReservationModel(
+        id: reservation.id,
+        promoterId: reservation.promoterId,
+        productId: reservation.productId,
+        quantity: reservation.quantity,
+        createdAt: reservation.createdAt,
+        expiresAt: reservation.expiresAt,
+        status: reservation.status,
+      ));
+      return const Right(unit);
+    } on DatabaseException catch (e) {
+      return Left(DatabaseFailure(e.message));
+    }
+  }
+
+  @override
+  Future<Either<Failure, List<Reservation>>> getReservationsByPromoter(String promoterId) async {
+    try {
+      return Right(await localDatasource.getReservationsByPromoter(promoterId));
+    } on DatabaseException catch (e) {
+      return Left(DatabaseFailure(e.message));
+    }
+  }
+
+  @override
+  Future<Either<Failure, Unit>> checkAndExpireReservations() async {
+    try {
+      await localDatasource.checkAndExpireReservations();
+      return const Right(unit);
+    } on DatabaseException catch (e) {
+      return Left(DatabaseFailure(e.message));
+    }
   }
 }

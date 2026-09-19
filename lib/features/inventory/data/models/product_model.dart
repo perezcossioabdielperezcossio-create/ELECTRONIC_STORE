@@ -10,31 +10,34 @@ class ProductModel extends Product {
     required super.category,
     required super.standardSellingPrice,
     required super.minStockThreshold,
+    super.activeReservedUnits,
     super.lots,
   });
 
-  factory ProductModel.fromMap(Map<String, dynamic> map, {List<Lot>? lots}) {
+  factory ProductModel.fromMap(Map<String, dynamic> map, [List<Lot> lots = const []]) {
     return ProductModel(
-      id: map['id'] as String,
-      sku: map['sku'] as String,
-      name: map['name'] as String,
-      brand: map['brand'] as String,
-      category: map['category'] as String,
+      id:                   map['id'] as String,
+      sku:                  map['sku'] as String,
+      name:                 map['name'] as String,
+      brand:                map['brand'] as String,
+      category:             map['category'] as String,
       standardSellingPrice: (map['standard_selling_price'] as num).toDouble(),
-      minStockThreshold: map['min_stock_threshold'] as int,
-      lots: lots ?? const [],
+      minStockThreshold:    map['min_stock_threshold'] as int,
+      activeReservedUnits:  (map['active_reserved_units'] as int?) ?? 0,
+      lots:                 lots,
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
-      'id': id,
-      'sku': sku,
-      'name': name,
-      'brand': brand,
-      'category': category,
+      'id':                     id,
+      'sku':                    sku,
+      'name':                   name,
+      'brand':                  brand,
+      'category':               category,
       'standard_selling_price': standardSellingPrice,
-      'min_stock_threshold': minStockThreshold,
+      'min_stock_threshold':    minStockThreshold,
+      // lots & active_reserved_units are generally not saved back to products table
     };
   }
 

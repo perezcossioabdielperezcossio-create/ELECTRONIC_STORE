@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS promoters (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     phone TEXT,
+    commission_rate REAL DEFAULT 0.0,
+    created_at TEXT DEFAULT (datetime('now')),
     is_active INTEGER DEFAULT 1
 );
 
@@ -71,13 +73,13 @@ CREATE TABLE IF NOT EXISTS sale_items (
 CREATE TABLE IF NOT EXISTS reservations (
     id TEXT PRIMARY KEY,
     promoter_id TEXT NOT NULL,
-    lot_id TEXT NOT NULL,
+    product_id TEXT NOT NULL,
     quantity INTEGER NOT NULL,
     created_at TEXT DEFAULT (datetime('now')),
     expires_at TEXT NOT NULL,
-    status TEXT DEFAULT 'ACTIVA',
+    status TEXT DEFAULT 'ACTIVE',
     FOREIGN KEY (promoter_id) REFERENCES promoters(id),
-    FOREIGN KEY (lot_id) REFERENCES lots(id)
+    FOREIGN KEY (product_id) REFERENCES products(id)
 );
 
 CREATE TABLE IF NOT EXISTS sync_queue (
