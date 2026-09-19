@@ -4,3 +4,5 @@ class ValidationException  implements Exception { final String message; const Va
 class NotFoundException    implements Exception { final String message; const NotFoundException(this.message); }
 class InsufficientStockException implements Exception { final String message; const InsufficientStockException(this.message); }
 class AntiLossException    implements Exception { final String message; const AntiLossException(this.message); }
+class RefundWindowExpiredException implements Exception { final String message; const RefundWindowExpiredException(this.message); }
+class SaleLockedException implements Exception { final String message; const SaleLockedException(this.message); }

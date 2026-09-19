@@ -1,7 +1,7 @@
 import 'package:equatable/equatable.dart';
 import 'sale_item.dart';
 
-enum SaleStatus { pending, completed, voided }
+enum SaleStatus { pending, completed, voided, refunded }
 
 class Sale extends Equatable {
   final String id;

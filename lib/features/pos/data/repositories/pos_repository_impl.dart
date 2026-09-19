@@ -79,4 +79,20 @@ class PosRepositoryImpl implements PosRepository {
       return Left(DatabaseFailure(e.message));
     }
   }
+
+  @override
+  Future<Either<Failure, Unit>> refundSale(String saleId) async {
+    try {
+      await localDatasource.refundSale(saleId);
+      return const Right(unit);
+    } on RefundWindowExpiredException catch (e) {
+      return Left(ValidationFailure(e.message));
+    } on SaleLockedException catch (e) {
+      return Left(ValidationFailure(e.message));
+    } on DatabaseException catch (e) {
+      return Left(DatabaseFailure(e.message));
+    } catch (e) {
+      return Left(DatabaseFailure(e.toString()));
+    }
+  }
 }

@@ -92,7 +92,22 @@ class InventoryLocalDataSourceImpl implements InventoryLocalDataSource {
   @override
   Future<List<ProductModel>> getAllProducts() async {
     final maps = await database.query('products', where: 'is_active = 1');
-    return maps.map((m) => ProductModel.fromMap(m)).toList();
+    final List<ProductModel> products = [];
+
+    for (final productMap in maps) {
+      final productId = productMap['id'] as String;
+      
+      final lotsResult = await database.query(
+        'lots',
+        where: 'product_id = ? AND current_quantity > 0',
+        whereArgs: [productId],
+      );
+      
+      final lots = lotsResult.map((lotMap) => LotModel.fromMap(lotMap)).toList();
+      products.add(ProductModel.fromMap(productMap, lots: lots));
+    }
+    
+    return products;
   }
 
   @override

@@ -8,4 +8,5 @@ abstract class PosRepository {
   Future<Either<Failure, Sale>>       getSaleById(String id);
   Future<Either<Failure, List<Sale>>> getSalesByDate(DateTime date);
   Future<Either<Failure, Unit>>       voidSale(String id);
+  Future<Either<Failure, Unit>>       refundSale(String saleId);
 }

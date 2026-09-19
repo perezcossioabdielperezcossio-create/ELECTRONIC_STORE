@@ -47,7 +47,7 @@ class DashboardLocalDatasourceImpl implements DashboardLocalDatasource {
         SUM(si.quantity * si.unit_cost) as capital_base_recuperado
       FROM sales s
       JOIN sale_items si ON s.id = si.sale_id
-      WHERE DATE(s.created_at) = ?
+      WHERE DATE(s.created_at) = ? AND s.status NOT IN ('refunded', 'voided', 'cancelled')
       GROUP BY s.payment_method
     ''', [dateString]);
 
@@ -88,6 +88,7 @@ class DashboardLocalDatasourceImpl implements DashboardLocalDatasource {
         SUM(si.quantity * si.unit_cost) as total_costos
       FROM sales s
       JOIN sale_items si ON s.id = si.sale_id
+      WHERE s.status NOT IN ('refunded', 'voided', 'cancelled')
       GROUP BY CASE WHEN s.promoter_id IS NULL THEN 'Venta Directa' ELSE 'Red de Promotores' END
     ''');
 

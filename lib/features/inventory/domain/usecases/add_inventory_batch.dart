@@ -10,8 +10,14 @@ class AddLotUseCase implements UseCase<Unit, AddLotParams> {
   const AddLotUseCase(this.repository);
 
   @override
-  Future<Either<Failure, Unit>> call(AddLotParams params) =>
-      repository.addLotToProduct(productId: params.productId, lot: params.lot).then((_) => const Right(unit));
+  Future<Either<Failure, Unit>> call(AddLotParams params) async {
+    try {
+      await repository.addLotToProduct(productId: params.productId, lot: params.lot);
+      return const Right(unit);
+    } catch (e) {
+      return Left(DatabaseFailure('Error agregando lote: $e'));
+    }
+  }
 }
 
 class AddLotParams extends Equatable {

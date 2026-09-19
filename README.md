@@ -53,6 +53,17 @@ Utilizamos este archivo para llevar un registro del progreso del desarrollo.
   - Implementación completa de la capa de datos (Datasource y Repositorio local SQLite) con consultas agregadas (`SUM`, `JOINs` entre `lots`, `products`, `sales` y `sale_items`).
   - Casos de Uso del dominio implementados para cálculo matemático del Balance Patrimonial, Utilidad por Canales y Conciliación Diaria (Efectivo vs Banco).
   - UI de alta calidad desarrollada (`DashboardView`) e integrada con `DashboardViewModel` (ChangeNotifier) y soporte Pull-to-Refresh y selector de fecha. Pruebas unitarias SQLite In-Memory (`sqflite_common_ffi`) con 100% de éxito.
+- **[KAN-12] Administración de Inventario y Lotes FIFO:**
+  - Desarrollo de un diálogo modal (`AddLotDialog`) para registrar reabastecimientos (ingreso de nuevos lotes) capturando la cantidad y costo real por lote, manteniendo la integridad FIFO sin "promediar" costos históricamente.
+  - Creación del `ProductDetailBottomSheet` para mostrar estadísticas agregadas y listar todos los lotes activos de manera cronológica (incluyendo costos y stock remanente).
+  - Refactorización de `InventoryViewModel` introduciendo un filtro por `InventoryFilter` mediante Chips visuales (Todos, Stock Bajo, Agotados) en la cabecera de la UI.
+  - Corrección de la capa de datos (`InventoryLocalDataSource`) introduciendo sub-queries asíncronas para hidratar todos los productos con sus lotes activos (`getAllProducts`), resolviendo el bug visual donde el stock aparecía vacío.
+  - Pruebas unitarias 100% exitosas verificando que se incrementa el `availableStock` exacto al esperado.
+- **[KAN-13] Devoluciones en Ventana de 24 Horas y Reintegración FIFO:**
+  - Implementación de reglas estrictas de negocio lanzando excepciones de dominio (`RefundWindowExpiredException` y `SaleLockedException`) para bloquear devoluciones que superan las 24 horas o que ya han sido anuladas.
+  - Creación de transacción atómica SQLite en la capa de persistencia (`PosLocalDatasourceImpl.refundSale()`) que actualiza la venta a estado `refunded` y localiza el lote activo más reciente de cada producto vendido para reintegrar su inventario exacto y revertir el descargo FIFO.
+  - Refactorización del `DashboardLocalDatasourceImpl` excluyendo ventas en estado `'refunded', 'voided', 'cancelled'` para asegurar neutralización financiera (RF-15) sobre arqueo diario y métricas por canal.
+  - Desarrollo en UI del `RecentSalesBottomSheet` dentro de `PosView`, mostrando un historial de ventas del día actual con capacidad integrada y validada visualmente para desencadenar la anulación e inserción reversa. Test unitarios pasando al 100%.
 
 ### Fase 1: Arquitectura Base y Modelado (✅ Completado)
 - [x] Crear estructura de carpetas (Clean Architecture + Feature First).
@@ -70,7 +81,7 @@ Utilizamos este archivo para llevar un registro del progreso del desarrollo.
 
 ### Fase 3: Interfaz de Usuario y Navegación (⏳ Pendiente)
 - [ ] Implementar la navegación con GoRouter (Rutas definidas en `core/constants`).
-- [ ] UI final de Inventario (Listado, Creación de Productos).
+- [x] UI final de Inventario (Listado, Desglose de Lotes, Creación de Lotes).
 - [x] UI final del POS (Carrito, Selección de Productos, Checkout).
 - [ ] UI final de Promotores y Comisiones.
 - [x] UI del Dashboard.

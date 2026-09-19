@@ -54,9 +54,9 @@ class _InventoryCatalogScreenState extends State<InventoryCatalogScreen> {
                   builder: (context, _) {
                     return FilterChip(
                       label: const Text('Reposición'),
-                      selected: widget.viewModel.showOnlyReplenishment,
-                      onSelected: (_) {
-                        widget.viewModel.toggleReplenishmentFilter();
+                      selected: widget.viewModel.filter == InventoryFilter.lowStock || widget.viewModel.filter == InventoryFilter.outOfStock,
+                      onSelected: (selected) {
+                        widget.viewModel.setFilter(selected ? InventoryFilter.lowStock : InventoryFilter.all);
                       },
                       selectedColor: Colors.amber.shade200,
                     );

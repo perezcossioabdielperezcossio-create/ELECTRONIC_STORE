@@ -7,13 +7,20 @@ import '../../../../core/usecases/usecase.dart';
 import '../../../inventory/domain/entities/product.dart';
 import '../../../inventory/domain/usecases/get_all_products.dart';
 
+import '../../domain/usecases/get_sales_by_date.dart';
+import '../../domain/usecases/refund_sale_usecase.dart';
+
 class PosViewModel extends ChangeNotifier {
   final CreateSale createSale;
   final GetAllProducts getAllProducts;
+  final GetSalesByDate getSalesByDate;
+  final RefundSaleUseCase refundSaleUseCase;
 
   PosViewModel({
     required this.createSale,
     required this.getAllProducts,
+    required this.getSalesByDate,
+    required this.refundSaleUseCase,
   });
 
   // Catálogo y Búsqueda
@@ -153,6 +160,52 @@ class PosViewModel extends ChangeNotifier {
       (_) { clearCart(); _error = null; },
     );
     notifyListeners();
+    return result.isRight();
+  }
+
+  // Historial y Devoluciones
+  List<Sale> _recentSales = [];
+  bool _isLoadingRecentSales = false;
+
+  List<Sale> get recentSales => List.unmodifiable(_recentSales);
+  bool get isLoadingRecentSales => _isLoadingRecentSales;
+
+  Future<void> loadRecentSales() async {
+    _isLoadingRecentSales = true;
+    notifyListeners();
+
+    final result = await getSalesByDate(DateParams(DateTime.now()));
+    result.fold(
+      (f) => _error = f.message,
+      (sales) {
+        _recentSales = sales;
+        _recentSales.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      },
+    );
+
+    _isLoadingRecentSales = false;
+    notifyListeners();
+  }
+
+  Future<bool> refundSale(String saleId) async {
+    _isLoadingRecentSales = true;
+    notifyListeners();
+
+    final result = await refundSaleUseCase(saleId);
+    
+    result.fold(
+      (f) => _error = f.message,
+      (_) => _error = null,
+    );
+
+    if (result.isRight()) {
+      await loadRecentSales();
+      await loadProducts(); // Recargar inventario
+    } else {
+      _isLoadingRecentSales = false;
+      notifyListeners();
+    }
+    
     return result.isRight();
   }
 }

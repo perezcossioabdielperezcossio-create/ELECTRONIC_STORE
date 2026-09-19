@@ -8,6 +8,7 @@ abstract class PosLocalDatasource {
   Future<SaleModel>     getSaleById(String id);
   Future<List<SaleModel>> getSalesByDate(DateTime date);
   Future<void>          voidSale(String id);
+  Future<void>          refundSale(String saleId);
 }
 
 class PosLocalDatasourceImpl implements PosLocalDatasource {
@@ -107,5 +108,70 @@ class PosLocalDatasourceImpl implements PosLocalDatasource {
     final db = await dbHelper.database;
     await db.update('sales', {'status': 'voided'},
         where: 'id = ?', whereArgs: [id]);
+  }
+
+  @override
+  Future<void> refundSale(String saleId) async {
+    final db = await dbHelper.database;
+    await db.transaction((txn) async {
+      final sales = await txn.query('sales', where: 'id = ?', whereArgs: [saleId]);
+      if (sales.isEmpty) throw const NotFoundException('Venta no encontrada');
+      
+      final saleMap = sales.first;
+      final status = saleMap['status'] as String?;
+      final isLocked = (saleMap['is_locked'] as int?) ?? 0;
+      final createdAtStr = saleMap['created_at'] as String?;
+      
+      if (status == 'refunded' || status == 'voided') {
+        throw const SaleLockedException('La venta ya fue anulada o devuelta.');
+      }
+      if (isLocked == 1) {
+        throw const SaleLockedException('La venta está bloqueada y no puede modificarse.');
+      }
+      
+      if (createdAtStr != null) {
+        final createdAt = DateTime.tryParse(createdAtStr);
+        if (createdAt != null) {
+          final difference = DateTime.now().difference(createdAt);
+          if (difference.inHours >= 24) {
+            throw const RefundWindowExpiredException('El tiempo límite de 24 horas para devoluciones ha expirado.');
+          }
+        }
+      }
+
+      await txn.update(
+        'sales', 
+        {'status': 'refunded'}, 
+        where: 'id = ?', 
+        whereArgs: [saleId],
+      );
+
+      final items = await txn.query('sale_items', where: 'sale_id = ?', whereArgs: [saleId]);
+      for (final item in items) {
+        final productId = item['product_id'] as String;
+        final quantity = item['quantity'] as int;
+
+        final latestLotResult = await txn.query(
+          'lots',
+          columns: ['id', 'current_quantity'],
+          where: 'product_id = ?',
+          whereArgs: [productId],
+          orderBy: 'purchase_date DESC',
+          limit: 1,
+        );
+
+        if (latestLotResult.isNotEmpty) {
+          final lotId = latestLotResult.first['id'] as String;
+          final currentQty = latestLotResult.first['current_quantity'] as int;
+
+          await txn.update(
+            'lots',
+            {'current_quantity': currentQty + quantity},
+            where: 'id = ?',
+            whereArgs: [lotId],
+          );
+        }
+      }
+    });
   }
 }

@@ -7,6 +7,7 @@ import '../../domain/usecases/consume_stock_fifo.dart';
 import '../../../../core/usecases/usecase.dart';
 
 enum ViewState { idle, loading, error }
+enum InventoryFilter { all, lowStock, outOfStock }
 
 class InventoryViewModel extends ChangeNotifier {
   final GetAllProducts    getAllProductsUseCase;
@@ -24,14 +25,14 @@ class InventoryViewModel extends ChangeNotifier {
   String?             _errorMessage;
   
   String _searchQuery = '';
-  bool _showOnlyReplenishment = false;
+  InventoryFilter _filter = InventoryFilter.all;
 
   ViewState     get state        => _state;
   List<Product> get products     => List.unmodifiable(_products);
   String?       get errorMessage => _errorMessage;
   
   String get searchQuery => _searchQuery;
-  bool get showOnlyReplenishment => _showOnlyReplenishment;
+  InventoryFilter get filter => _filter;
 
   List<Product> get filteredProducts {
     return _products.where((product) {
@@ -39,8 +40,12 @@ class InventoryViewModel extends ChangeNotifier {
           product.name.toLowerCase().contains(_searchQuery.toLowerCase()) || 
           product.sku.toLowerCase().contains(_searchQuery.toLowerCase());
           
-      final requiresReplenishment = product.status == StockStatus.lowStock || product.status == StockStatus.outOfStock;
-      final matchesFilter = !_showOnlyReplenishment || requiresReplenishment;
+      bool matchesFilter = true;
+      if (_filter == InventoryFilter.lowStock) {
+        matchesFilter = product.status == StockStatus.lowStock || product.status == StockStatus.outOfStock;
+      } else if (_filter == InventoryFilter.outOfStock) {
+        matchesFilter = product.status == StockStatus.outOfStock;
+      }
       
       return matchesSearch && matchesFilter;
     }).toList();
@@ -51,8 +56,8 @@ class InventoryViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  void toggleReplenishmentFilter() {
-    _showOnlyReplenishment = !_showOnlyReplenishment;
+  void setFilter(InventoryFilter filter) {
+    _filter = filter;
     notifyListeners();
   }
 
@@ -76,7 +81,11 @@ class InventoryViewModel extends ChangeNotifier {
 
   Future<bool> addLot(String productId, Lot lot) async {
     final result = await addLotUseCase(AddLotParams(productId: productId, lot: lot));
-    return result.isRight();
+    if (result.isRight()) {
+      await loadProducts();
+      return true;
+    }
+    return false;
   }
 
   Future<bool> consumeStock(String productId, int quantity) async {

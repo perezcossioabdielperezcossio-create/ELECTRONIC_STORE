@@ -5,6 +5,8 @@ import '../../../inventory/domain/entities/product.dart';
 import '../viewmodels/pos_viewmodel.dart';
 import '../widgets/cart_item_tile.dart';
 
+import '../widgets/recent_sales_bottom_sheet.dart';
+
 class PosView extends StatefulWidget {
   const PosView({super.key});
 
@@ -29,11 +31,26 @@ class _PosViewState extends State<PosView> {
     super.dispose();
   }
 
+  void _showRecentSales(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => const RecentSalesBottomSheet(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Punto de Venta'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.receipt_long),
+            tooltip: 'Historial de Hoy',
+            onPressed: () => _showRecentSales(context),
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(60),
           child: Padding(
