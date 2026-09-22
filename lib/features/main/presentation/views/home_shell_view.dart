@@ -6,7 +6,7 @@ import '../../../pos/presentation/widgets/void_sale_dialog.dart';
 import '../../../inventory/presentation/screens/inventory_catalog_screen.dart';
 import '../../../inventory/presentation/viewmodels/inventory_viewmodel.dart';
 import '../../../promoters/presentation/views/promoters_view.dart';
-import '../../../dashboard/presentation/views/dashboard_view.dart';
+import '../../../dashboard/presentation/views/dashboard_overview_view.dart';
 
 class HomeShellView extends StatefulWidget {
   const HomeShellView({super.key});
@@ -23,7 +23,7 @@ class _HomeShellViewState extends State<HomeShellView> {
       InventoryCatalogScreen(viewModel: context.read<InventoryViewModel>()),
       const PosSalesView(),
       const PromotersView(),
-      const DashboardView(),
+      const DashboardOverviewView(),
     ];
   }
 
