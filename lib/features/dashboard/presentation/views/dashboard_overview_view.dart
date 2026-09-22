@@ -4,14 +4,14 @@ import 'package:intl/intl.dart';
 import '../viewmodels/dashboard_viewmodel.dart';
 import '../../data/models/financial_metrics_model.dart';
 
-class DashboardView extends StatefulWidget {
-  const DashboardView({super.key});
+class DashboardOverviewView extends StatefulWidget {
+  const DashboardOverviewView({super.key});
 
   @override
-  State<DashboardView> createState() => _DashboardViewState();
+  State<DashboardOverviewView> createState() => _DashboardOverviewViewState();
 }
 
-class _DashboardViewState extends State<DashboardView> {
+class _DashboardOverviewViewState extends State<DashboardOverviewView> {
   @override
   void initState() {
     super.initState();

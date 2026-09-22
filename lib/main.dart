@@ -19,6 +19,12 @@ import 'features/pos/domain/usecases/create_sale.dart';
 import 'features/pos/domain/usecases/void_sale_usecase.dart';
 import 'features/pos/presentation/viewmodels/pos_viewmodel.dart';
 
+import 'features/dashboard/data/datasources/dashboard_local_datasource.dart';
+import 'features/dashboard/data/repositories/dashboard_repository_impl.dart';
+import 'features/dashboard/domain/usecases/get_financial_overview_usecase.dart';
+import 'features/dashboard/domain/usecases/get_daily_cash_audit_usecase.dart';
+import 'features/dashboard/presentation/viewmodels/dashboard_viewmodel.dart';
+
 import 'features/main/presentation/views/home_shell_view.dart';
 
 void main() async {
@@ -48,6 +54,12 @@ void main() async {
   final addLotUseCase = AddLotUseCase(invRepo);
   final consumeStockFifo = ConsumeStockFifo(invRepo);
 
+  // Dashboard
+  final dashboardLocalDs = DashboardLocalDatasourceImpl(dbHelper);
+  final dashboardRepo = DashboardRepositoryImpl(dashboardLocalDs);
+  final getFinancialOverview = GetFinancialOverviewUseCase(dashboardRepo);
+  final getDailyCashAudit = GetDailyCashAuditUseCase(dashboardRepo);
+
   runApp(
     MultiProvider(
       providers: [
@@ -65,6 +77,12 @@ void main() async {
             getAllProducts: getAllProducts,
             voidSaleUseCase: voidSale,
           )..loadProducts(), // Pre-load products on startup
+        ),
+        ChangeNotifierProvider(
+          create: (_) => DashboardViewModel(
+            getFinancialOverview: getFinancialOverview,
+            getDailyCashAudit: getDailyCashAudit,
+          ),
         ),
       ],
       child: const MyApp(),
