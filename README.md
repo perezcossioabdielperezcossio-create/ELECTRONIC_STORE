@@ -53,11 +53,18 @@ Utilizamos este archivo para llevar un registro del progreso del desarrollo.
   - Implementación completa de la capa de datos (Datasource y Repositorio local SQLite) con consultas agregadas (`SUM`, `JOINs` entre `lots`, `products`, `sales` y `sale_items`).
   - Casos de Uso del dominio implementados para cálculo matemático del Balance Patrimonial, Utilidad por Canales y Conciliación Diaria (Efectivo vs Banco).
   - UI de alta calidad desarrollada (`DashboardView`) e integrada con `DashboardViewModel` (ChangeNotifier) y soporte Pull-to-Refresh y selector de fecha. Pruebas unitarias SQLite In-Memory (`sqflite_common_ffi`) con 100% de éxito.
+<<<<<<< HEAD
 - **[KAN-15] Motor de Sincronización Offline-First (SyncQueue y SyncManager):**
   - Implementación de la tabla `sync_queue` para almacenar todas las operaciones de mutación (CREATE, UPDATE, DELETE).
   - Integración transparente en los Local Datasources (`PosLocalDatasource`, `InventoryLocalDataSource`, `PromoterLocalDatasource`) para encolar datos dentro de transacciones atómicas de SQLite.
   - Creación del `SyncManager` que orquesta el procesamiento FIFO y cuenta con mecanismos de tolerancia a fallos y reintentos.
   - Cobertura de pruebas completa confirmando el registro, simulación de recuperación de red, y reintentos ante caídas transitorias.
+=======
+- **[KAN-14] Módulo 3: Red de Promotores, Dropshipping y Reservas con TTL:**
+  - Modificación del esquema de base de datos para la gestión de reservas temporales con caducidad (`expires_at`) y cálculo reactivo en base de datos (`LEFT JOIN`) para que el inventario muestre stock deducido automáticamente por reservas activas.
+  - Creación de Casos de Uso del dominio para crear reservas con TTL exacto (12h) y validación de vigencia del stock.
+  - Implementación de `PromoterCatalogView` (catálogo enfocado en promotores ocultando de forma estricta márgenes y costos de adquisición) y `NewReservationDialog` para interactuar con productos con reserva anticipada.
+>>>>>>> f81970e35a48cba7f28ff61d5be7f4fb5304c046
 
 ### Fase 1: Arquitectura Base y Modelado (✅ Completado)
 - [x] Crear estructura de carpetas (Clean Architecture + Feature First).
@@ -77,7 +84,7 @@ Utilizamos este archivo para llevar un registro del progreso del desarrollo.
 - [ ] Implementar la navegación con GoRouter (Rutas definidas en `core/constants`).
 - [ ] UI final de Inventario (Listado, Creación de Productos).
 - [x] UI final del POS (Carrito, Selección de Productos, Checkout).
-- [ ] UI final de Promotores y Comisiones.
+- [x] UI final de Promotores y Comisiones.
 - [x] UI del Dashboard.
 
 ### Fase 4: Sincronización y Backend (🚧 En Progreso)
