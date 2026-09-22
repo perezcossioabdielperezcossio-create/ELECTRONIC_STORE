@@ -1,7 +1,7 @@
-﻿import 'package:dartz/dartz.dart';
-import '../../../../core/errors/failures.dart';
-import '../entities/dashboard_summary.dart';
+import '../../data/models/financial_metrics_model.dart';
 
 abstract class DashboardRepository {
-  Future<Either<Failure, DashboardSummary>> getSummary(DateTime date);
+  Future<BalancePatrimonial> getBalancePatrimonial();
+  Future<ArqueoDiario> getArqueoDiario({DateTime? date});
+  Future<List<MetricaCanal>> getMetricasCanal();
 }

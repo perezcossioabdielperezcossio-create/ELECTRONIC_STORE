@@ -1,27 +1,67 @@
-﻿import 'package:flutter/foundation.dart';
-import '../../domain/entities/dashboard_summary.dart';
-import '../../domain/usecases/get_dashboard_summary.dart';
+import 'package:flutter/foundation.dart';
+import '../../domain/usecases/get_financial_overview_usecase.dart';
+import '../../domain/usecases/get_daily_cash_audit_usecase.dart';
+import '../../data/models/financial_metrics_model.dart';
+
+enum DashboardState { initial, loading, loaded, error }
 
 class DashboardViewModel extends ChangeNotifier {
-  final GetDashboardSummary _getSummary;
-  DashboardViewModel({required GetDashboardSummary getSummary})
-      : _getSummary = getSummary;
+  final GetFinancialOverviewUseCase getFinancialOverview;
+  final GetDailyCashAuditUseCase getDailyCashAudit;
 
-  DashboardSummary? _summary;
-  bool _isLoading = false;
-  String? _error;
+  DashboardState _state = DashboardState.initial;
+  DashboardState get state => _state;
 
-  DashboardSummary? get summary   => _summary;
-  bool              get isLoading => _isLoading;
-  String?           get error     => _error;
+  String? _errorMessage;
+  String? get errorMessage => _errorMessage;
 
-  Future<void> load([DateTime? date]) async {
-    _isLoading = true; notifyListeners();
-    final result = await _getSummary(DashboardParams(date ?? DateTime.now()));
-    result.fold(
-      (f) { _error = f.message; },
-      (s) { _summary = s; _error = null; },
+  FinancialOverviewResult? _overview;
+  FinancialOverviewResult? get overview => _overview;
+
+  ArqueoDiario? _arqueoDiario;
+  ArqueoDiario? get arqueoDiario => _arqueoDiario;
+
+  DateTime _selectedDate = DateTime.now();
+  DateTime get selectedDate => _selectedDate;
+
+  DashboardViewModel({
+    required this.getFinancialOverview,
+    required this.getDailyCashAudit,
+  });
+
+  Future<void> loadDashboardData() async {
+    _state = DashboardState.loading;
+    notifyListeners();
+
+    final overviewResult = await getFinancialOverview();
+    final arqueoResult = await getDailyCashAudit(date: _selectedDate);
+
+    overviewResult.fold(
+      (failure) {
+        _errorMessage = failure.message;
+        _state = DashboardState.error;
+      },
+      (data) {
+        _overview = data;
+        arqueoResult.fold(
+          (failure) {
+            _errorMessage = failure.message;
+            _state = DashboardState.error;
+          },
+          (arqueoData) {
+            _arqueoDiario = arqueoData;
+            _state = DashboardState.loaded;
+            _errorMessage = null;
+          },
+        );
+      },
     );
-    _isLoading = false; notifyListeners();
+
+    notifyListeners();
+  }
+
+  Future<void> changeDate(DateTime newDate) async {
+    _selectedDate = newDate;
+    await loadDashboardData();
   }
 }

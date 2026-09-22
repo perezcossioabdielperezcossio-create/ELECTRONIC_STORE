@@ -1,23 +1,24 @@
-﻿import 'package:dartz/dartz.dart';
+import 'package:dartz/dartz.dart';
 import 'package:equatable/equatable.dart';
 import '../../../../core/errors/failures.dart';
 import '../../../../core/usecases/usecase.dart';
-import '../entities/inventory_batch.dart';
+import '../entities/lot.dart';
 import '../repositories/inventory_repository.dart';
 
-class AddInventoryBatch implements UseCase<Unit, AddBatchParams> {
+class AddLotUseCase implements UseCase<Unit, AddLotParams> {
   final InventoryRepository repository;
-  const AddInventoryBatch(this.repository);
+  const AddLotUseCase(this.repository);
 
   @override
-  Future<Either<Failure, Unit>> call(AddBatchParams params) =>
-      repository.addBatch(params.batch);
+  Future<Either<Failure, Unit>> call(AddLotParams params) =>
+      repository.addLotToProduct(productId: params.productId, lot: params.lot).then((_) => const Right(unit));
 }
 
-class AddBatchParams extends Equatable {
-  final InventoryBatch batch;
-  const AddBatchParams(this.batch);
+class AddLotParams extends Equatable {
+  final String productId;
+  final Lot lot;
+  const AddLotParams({required this.productId, required this.lot});
 
   @override
-  List<Object> get props => [batch];
+  List<Object> get props => [productId, lot];
 }

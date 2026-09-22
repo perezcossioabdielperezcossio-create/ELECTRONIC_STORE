@@ -1,16 +1,16 @@
-﻿import 'package:dartz/dartz.dart';
+import 'package:dartz/dartz.dart';
 import 'package:equatable/equatable.dart';
 import '../../../../core/errors/failures.dart';
 import '../../../../core/usecases/usecase.dart';
-import '../entities/inventory_batch.dart';
+import '../entities/lot.dart';
 import '../repositories/inventory_repository.dart';
 
-class ConsumeStockFifo implements UseCase<List<InventoryBatch>, ConsumeStockParams> {
+class ConsumeStockFifo implements UseCase<List<Lot>, ConsumeStockParams> {
   final InventoryRepository repository;
   const ConsumeStockFifo(this.repository);
 
   @override
-  Future<Either<Failure, List<InventoryBatch>>> call(ConsumeStockParams params) =>
+  Future<Either<Failure, List<Lot>>> call(ConsumeStockParams params) =>
       repository.consumeStock(params.productId, params.quantity);
 }
 

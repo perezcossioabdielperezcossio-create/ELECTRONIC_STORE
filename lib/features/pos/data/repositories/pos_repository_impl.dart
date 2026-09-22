@@ -1,4 +1,4 @@
-﻿import 'package:dartz/dartz.dart';
+import 'package:dartz/dartz.dart';
 import '../../../../core/errors/exceptions.dart';
 import '../../../../core/errors/failures.dart';
 import '../../domain/entities/sale.dart';
@@ -24,6 +24,29 @@ class PosRepositoryImpl implements PosRepository {
         notes:      sale.notes,
       ));
       return const Right(unit);
+    } on DatabaseException catch (e) {
+      return Left(DatabaseFailure(e.message));
+    }
+  }
+
+  @override
+  Future<Either<Failure, Unit>> processSale(Sale sale) async {
+    try {
+      await localDatasource.processSale(SaleModel(
+        id:         sale.id,
+        items:      sale.items,
+        createdAt:  sale.createdAt,
+        discount:   sale.discount,
+        tax:        sale.tax,
+        status:     sale.status,
+        promoterId: sale.promoterId,
+        notes:      sale.notes,
+      ));
+      return const Right(unit);
+    } on AntiLossException catch (e) {
+      return Left(ValidationFailure(e.message));
+    } on InsufficientStockException catch (e) {
+      return Left(ValidationFailure(e.message));
     } on DatabaseException catch (e) {
       return Left(DatabaseFailure(e.message));
     }
