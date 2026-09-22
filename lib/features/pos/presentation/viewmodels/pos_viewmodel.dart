@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 import '../../domain/entities/sale.dart';
 import '../../domain/entities/sale_item.dart';
 import '../../domain/usecases/create_sale.dart';
+import '../../domain/usecases/void_sale_usecase.dart';
 import '../../../../core/usecases/usecase.dart';
 import '../../../inventory/domain/entities/product.dart';
 import '../../../inventory/domain/usecases/get_all_products.dart';
@@ -10,10 +11,12 @@ import '../../../inventory/domain/usecases/get_all_products.dart';
 class PosViewModel extends ChangeNotifier {
   final CreateSale createSale;
   final GetAllProducts getAllProducts;
+  final VoidSaleUseCase voidSaleUseCase;
 
   PosViewModel({
     required this.createSale,
     required this.getAllProducts,
+    required this.voidSaleUseCase,
   });
 
   // Catálogo y Búsqueda
@@ -30,10 +33,16 @@ class PosViewModel extends ChangeNotifier {
   double _deliveryFee = 0.0;
   String? _customerName;
   String? _customerPhone;
+  double _globalDiscount = 0.0;
+  double _lastNetProfit = 0.0;
+  double _lastRecoveredCapital = 0.0;
 
   String get paymentMethod => _paymentMethod;
   String get deliveryMethod => _deliveryMethod;
   double get deliveryFee => _deliveryFee;
+  double get globalDiscount => _globalDiscount;
+  double get lastNetProfit => _lastNetProfit;
+  double get lastRecoveredCapital => _lastRecoveredCapital;
   String? get customerName => _customerName;
   String? get customerPhone => _customerPhone;
 
@@ -42,6 +51,10 @@ class PosViewModel extends ChangeNotifier {
   void setDeliveryFee(double val) { _deliveryFee = val; notifyListeners(); }
   void setCustomerName(String val) { _customerName = val; notifyListeners(); }
   void setCustomerPhone(String val) { _customerPhone = val; notifyListeners(); }
+  void setGlobalDiscount(double val) {
+    _globalDiscount = val;
+    notifyListeners();
+  }
 
   final List<SaleItem> _cart = [];
   bool _isLoading = false;
@@ -50,8 +63,36 @@ class PosViewModel extends ChangeNotifier {
   List<SaleItem> get cart      => List.unmodifiable(_cart);
   bool           get isLoading => _isLoading;
   String?        get error     => _error;
-  double         get cartTotal =>
-      _cart.fold(0, (s, i) => s + i.lineTotal);
+
+  double get cartTotal {
+    double total = _cart.fold(0.0, (sum, item) => sum + (item.quantity * item.unitPrice) - item.lineDiscount);
+    return (total - _globalDiscount) > 0 ? (total - _globalDiscount) : 0.0;
+  }
+  
+  double get totalCostBase {
+    return _cart.fold(0.0, (sum, item) {
+      final product = _filteredProducts.firstWhere(
+        (p) => p.id == item.productId,
+        orElse: () => _allProducts.firstWhere(
+          (p) => p.id == item.productId,
+          orElse: () => Product(
+            id: item.productId, 
+            sku: '', 
+            name: item.productName, 
+            brand: '',
+            category: '',
+            standardSellingPrice: 0.0,
+            minStockThreshold: 0,
+          ),
+        ),
+      );
+      return sum + (product.latestCost ?? 0.0) * item.quantity;
+    });
+  }
+
+  bool get violatesAntiLoss {
+    return cartTotal < totalCostBase;
+  }
 
   Future<void> loadProducts() async {
     _isLoadingProducts = true;
@@ -131,7 +172,15 @@ class PosViewModel extends ChangeNotifier {
 
   Future<bool> checkout({String? promoterId}) async {
     _isLoading = true;
+    _error = null;
     notifyListeners();
+
+    if (violatesAntiLoss) {
+      _error = 'Violación anti-pérdida: El precio total (Bs. $cartTotal) es menor al costo (Bs. $totalCostBase).';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
 
     final sale = Sale(
       id:             const Uuid().v4(),
@@ -150,7 +199,28 @@ class PosViewModel extends ChangeNotifier {
 
     result.fold(
       (f) => _error = f.message,
-      (_) { clearCart(); _error = null; },
+      (_) {
+        _lastRecoveredCapital = totalCostBase;
+        _lastNetProfit = cartTotal - totalCostBase;
+        clearCart();
+        _globalDiscount = 0.0;
+        _error = null;
+      },
+    );
+    notifyListeners();
+    return result.isRight();
+  }
+
+  Future<bool> voidSale(String saleId) async {
+    _isLoading = true;
+    notifyListeners();
+    
+    final result = await voidSaleUseCase(saleId);
+    _isLoading = false;
+    
+    result.fold(
+      (f) => _error = f.message,
+      (_) => _error = null,
     );
     notifyListeners();
     return result.isRight();
