@@ -53,6 +53,11 @@ Utilizamos este archivo para llevar un registro del progreso del desarrollo.
   - Implementación completa de la capa de datos (Datasource y Repositorio local SQLite) con consultas agregadas (`SUM`, `JOINs` entre `lots`, `products`, `sales` y `sale_items`).
   - Casos de Uso del dominio implementados para cálculo matemático del Balance Patrimonial, Utilidad por Canales y Conciliación Diaria (Efectivo vs Banco).
   - UI de alta calidad desarrollada (`DashboardView`) e integrada con `DashboardViewModel` (ChangeNotifier) y soporte Pull-to-Refresh y selector de fecha. Pruebas unitarias SQLite In-Memory (`sqflite_common_ffi`) con 100% de éxito.
+- **[KAN-15] Motor de Sincronización Offline-First (SyncQueue y SyncManager):**
+  - Implementación de la tabla `sync_queue` para almacenar todas las operaciones de mutación (CREATE, UPDATE, DELETE).
+  - Integración transparente en los Local Datasources (`PosLocalDatasource`, `InventoryLocalDataSource`, `PromoterLocalDatasource`) para encolar datos dentro de transacciones atómicas de SQLite.
+  - Creación del `SyncManager` que orquesta el procesamiento FIFO y cuenta con mecanismos de tolerancia a fallos y reintentos.
+  - Cobertura de pruebas completa confirmando el registro, simulación de recuperación de red, y reintentos ante caídas transitorias.
 
 ### Fase 1: Arquitectura Base y Modelado (✅ Completado)
 - [x] Crear estructura de carpetas (Clean Architecture + Feature First).
@@ -75,8 +80,8 @@ Utilizamos este archivo para llevar un registro del progreso del desarrollo.
 - [ ] UI final de Promotores y Comisiones.
 - [x] UI del Dashboard.
 
-### Fase 4: Sincronización y Backend (⏳ Pendiente)
-- [ ] Implementar lógica de `SyncManager` para enviar operaciones pendientes.
+### Fase 4: Sincronización y Backend (🚧 En Progreso)
+- [x] Implementar lógica de `SyncManager` para enviar operaciones pendientes (Cola FIFO Offline-First).
 - [ ] Conectar con backend (REST API o Firebase).
 
 ## 🛠️ Tecnologías Utilizadas

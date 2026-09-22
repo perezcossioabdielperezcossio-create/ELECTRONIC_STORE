@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:uuid/uuid.dart';
 import '../../../../core/database/database_helper.dart';
 import '../models/sale_model.dart';
 import '../../../../core/errors/exceptions.dart';
@@ -17,7 +19,18 @@ class PosLocalDatasourceImpl implements PosLocalDatasource {
   @override
   Future<void> saveSale(SaleModel model) async {
     final db = await dbHelper.database;
-    await db.insert('sales', model.toMap());
+    await db.transaction((txn) async {
+      await txn.insert('sales', model.toMap());
+      await txn.insert('sync_queue', {
+        'id': const Uuid().v4(),
+        'table_name': 'sales',
+        'operation': 'CREATE',
+        'payload': jsonEncode(model.toMap()),
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+        'status': 'PENDING',
+        'retry_count': 0,
+      });
+    });
   }
 
   @override
@@ -25,6 +38,15 @@ class PosLocalDatasourceImpl implements PosLocalDatasource {
     final db = await dbHelper.database;
     await db.transaction((txn) async {
       await txn.insert('sales', model.toMap());
+      await txn.insert('sync_queue', {
+        'id': const Uuid().v4(),
+        'table_name': 'sales',
+        'operation': 'CREATE',
+        'payload': jsonEncode(model.toMap()),
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+        'status': 'PENDING',
+        'retry_count': 0,
+      });
       
       for (final item in model.items) {
         int remainingQuantity = item.quantity;
@@ -68,7 +90,7 @@ class PosLocalDatasourceImpl implements PosLocalDatasource {
 
         final averageUnitCost = item.quantity > 0 ? (totalCost / item.quantity) : 0.0;
 
-        await txn.insert('sale_items', {
+        final itemMap = {
           'id': '${model.id}_${item.productId}',
           'sale_id': model.id,
           'product_id': item.productId,
@@ -77,6 +99,17 @@ class PosLocalDatasourceImpl implements PosLocalDatasource {
           'unit_price': item.unitPrice,
           'unit_cost': averageUnitCost,
           'line_discount': item.lineDiscount,
+        };
+
+        await txn.insert('sale_items', itemMap);
+        await txn.insert('sync_queue', {
+          'id': const Uuid().v4(),
+          'table_name': 'sale_items',
+          'operation': 'CREATE',
+          'payload': jsonEncode(itemMap),
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+          'status': 'PENDING',
+          'retry_count': 0,
         });
       }
     });
@@ -105,7 +138,18 @@ class PosLocalDatasourceImpl implements PosLocalDatasource {
   @override
   Future<void> voidSale(String id) async {
     final db = await dbHelper.database;
-    await db.update('sales', {'status': 'voided'},
-        where: 'id = ?', whereArgs: [id]);
+    await db.transaction((txn) async {
+      await txn.update('sales', {'status': 'voided'},
+          where: 'id = ?', whereArgs: [id]);
+      await txn.insert('sync_queue', {
+        'id': const Uuid().v4(),
+        'table_name': 'sales',
+        'operation': 'UPDATE',
+        'payload': jsonEncode({'id': id, 'status': 'voided'}),
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+        'status': 'PENDING',
+        'retry_count': 0,
+      });
+    });
   }
 }

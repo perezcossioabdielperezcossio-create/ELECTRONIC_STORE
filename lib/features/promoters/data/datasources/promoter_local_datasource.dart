@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:uuid/uuid.dart';
 import '../../../../core/database/database_helper.dart';
 import '../models/promoter_model.dart';
 
@@ -28,6 +30,17 @@ class PromoterLocalDatasourceImpl implements PromoterLocalDatasource {
   @override
   Future<void> savePromoter(PromoterModel model) async {
     final db = await dbHelper.database;
-    await db.insert('promoters', model.toMap());
+    await db.transaction((txn) async {
+      await txn.insert('promoters', model.toMap());
+      await txn.insert('sync_queue', {
+        'id': const Uuid().v4(),
+        'table_name': 'promoters',
+        'operation': 'CREATE',
+        'payload': jsonEncode(model.toMap()),
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+        'status': 'PENDING',
+        'retry_count': 0,
+      });
+    });
   }
 }

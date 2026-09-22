@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:uuid/uuid.dart';
 import 'package:sqflite/sqflite.dart';
 import '../models/lot_model.dart';
 import '../models/product_model.dart';
@@ -26,21 +28,51 @@ class InventoryLocalDataSourceImpl implements InventoryLocalDataSource {
         product.toMap(),
         conflictAlgorithm: ConflictAlgorithm.fail,
       );
+      await txn.insert('sync_queue', {
+        'id': const Uuid().v4(),
+        'table_name': 'products',
+        'operation': 'CREATE',
+        'payload': jsonEncode(product.toMap()),
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+        'status': 'PENDING',
+        'retry_count': 0,
+      });
+
       await txn.insert(
         'lots',
         initialLot.toMap(),
         conflictAlgorithm: ConflictAlgorithm.fail,
       );
+      await txn.insert('sync_queue', {
+        'id': const Uuid().v4(),
+        'table_name': 'lots',
+        'operation': 'CREATE',
+        'payload': jsonEncode(initialLot.toMap()),
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+        'status': 'PENDING',
+        'retry_count': 0,
+      });
     });
   }
 
   @override
   Future<void> addLotToProduct(String productId, LotModel lot) async {
-    await database.insert(
-      'lots',
-      lot.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await database.transaction((txn) async {
+      await txn.insert(
+        'lots',
+        lot.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      await txn.insert('sync_queue', {
+        'id': const Uuid().v4(),
+        'table_name': 'lots',
+        'operation': 'CREATE',
+        'payload': jsonEncode(lot.toMap()),
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+        'status': 'PENDING',
+        'retry_count': 0,
+      });
+    });
   }
 
   @override
@@ -107,19 +139,34 @@ class InventoryLocalDataSourceImpl implements InventoryLocalDataSource {
     final consumed = <LotModel>[];
     var remaining = quantity;
 
-    for (final lot in lots) {
-      if (remaining <= 0) break;
-      final take = lot.currentQuantity < remaining ? lot.currentQuantity : remaining;
-      await database.update(
-        'lots',
-        {'current_quantity': lot.currentQuantity - take},
-        where: 'id = ?', whereArgs: [lot.id],
-      );
-      consumed.add(lot);
-      remaining -= take;
-    }
+    await database.transaction((txn) async {
+      for (final lot in lots) {
+        if (remaining <= 0) break;
+        final take = lot.currentQuantity < remaining ? lot.currentQuantity : remaining;
+        
+        await txn.update(
+          'lots',
+          {'current_quantity': lot.currentQuantity - take},
+          where: 'id = ?', whereArgs: [lot.id],
+        );
+        
+        await txn.insert('sync_queue', {
+          'id': const Uuid().v4(),
+          'table_name': 'lots',
+          'operation': 'UPDATE',
+          'payload': jsonEncode({'id': lot.id, 'current_quantity': lot.currentQuantity - take}),
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+          'status': 'PENDING',
+          'retry_count': 0,
+        });
+
+        consumed.add(lot);
+        remaining -= take;
+      }
+    });
 
     if (remaining > 0) throw Exception('Stock insuficiente');
     return consumed;
   }
 }
+

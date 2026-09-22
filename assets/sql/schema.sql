@@ -82,11 +82,10 @@ CREATE TABLE IF NOT EXISTS reservations (
 
 CREATE TABLE IF NOT EXISTS sync_queue (
     id TEXT PRIMARY KEY,
-    affected_table TEXT NOT NULL,
-    record_id TEXT NOT NULL,
-    action TEXT NOT NULL,
-    payload_json TEXT NOT NULL,
-    created_at TEXT DEFAULT (datetime('now')),
-    status TEXT DEFAULT 'PENDIENTE',
+    table_name TEXT NOT NULL,
+    operation TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    status TEXT DEFAULT 'PENDING',
     retry_count INTEGER DEFAULT 0
 );
