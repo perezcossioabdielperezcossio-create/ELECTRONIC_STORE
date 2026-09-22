@@ -46,11 +46,13 @@ void main() {
         ''');
         await db.execute('''
           CREATE TABLE sale_items(
+            id TEXT PRIMARY KEY,
             sale_id TEXT,
             product_id TEXT,
             product_name TEXT,
             quantity INTEGER,
             unit_price REAL,
+            unit_cost REAL,
             line_discount REAL
           )
         ''');
@@ -62,6 +64,17 @@ void main() {
             initial_quantity INTEGER,
             current_quantity INTEGER,
             real_unit_cost REAL
+          )
+        ''');
+        await db.execute('''
+          CREATE TABLE sync_queue(
+            id TEXT PRIMARY KEY,
+            table_name TEXT NOT NULL,
+            operation TEXT NOT NULL,
+            payload TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            status TEXT DEFAULT 'PENDING',
+            retry_count INTEGER DEFAULT 0
           )
         ''');
       },
