@@ -28,8 +28,21 @@ import 'features/dashboard/presentation/viewmodels/dashboard_viewmodel.dart';
 
 import 'features/main/presentation/views/home_shell_view.dart';
 
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  try {
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+    }
+  } catch (e) {
+    debugPrint('Firebase ya inicializado o aviso no crítico: $e');
+  }
   
   final dbHelper = DatabaseHelper.instance;
   

@@ -22,6 +22,11 @@ class TestRemoteSyncDataSource implements RemoteSyncDataSource {
       return SyncResult(success: false, errorMessage: error ?? 'Simulated error');
     }
   }
+
+  @override
+  Stream<List<Map<String, dynamic>>> listenToRemoteInventoryChanges() {
+    return const Stream.empty();
+  }
 }
 
 class MockDatabaseHelper extends Mock implements DatabaseHelper {}
@@ -34,6 +39,7 @@ void main() {
   late MockDatabaseHelper mockDatabaseHelper;
 
   setUpAll(() {
+    TestWidgetsFlutterBinding.ensureInitialized();
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   });
@@ -116,11 +122,7 @@ void main() {
     expect(pending.length, 0);
 
     final results = await db.query('sync_queue', orderBy: 'created_at ASC');
-    expect(results.length, 2);
-    expect(results[0]['status'], 'SYNCED');
-    expect(results[0]['payload'], contains('"id":1'));
-    expect(results[1]['status'], 'SYNCED');
-    expect(results[1]['payload'], contains('"id":2'));
+    expect(results.length, 0); // They are deleted upon sync
   });
 
   test('Test 3: Verificar que un fallo de red transitorio aumente retry_count sin borrar el registro de la cola', () async {

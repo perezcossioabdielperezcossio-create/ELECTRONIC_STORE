@@ -1,14 +1,18 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import '../../data/datasources/sync_local_datasource.dart';
 import '../../data/datasources/remote_sync_datasource.dart';
 
 class SyncManager extends ChangeNotifier {
   final SyncLocalDataSource localDataSource;
   final RemoteSyncDataSource remoteDataSource;
+  final Connectivity _connectivity = Connectivity();
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+  StreamSubscription<List<Map<String, dynamic>>>? _remoteProductsSubscription;
   
   bool _isSyncing = false;
-  bool _isOnline = true; // Assuming online initially, in a real app listen to connectivity_plus
+  bool _isOnline = true; // Will be updated by connectivity_plus
   int _pendingCount = 0;
 
   bool get isOnline => _isOnline;
@@ -18,7 +22,29 @@ class SyncManager extends ChangeNotifier {
     required this.localDataSource,
     required this.remoteDataSource,
   }) {
+    _initConnectivity();
     _refreshPendingCount();
+  }
+
+  void initialize() {
+    _remoteProductsSubscription = remoteDataSource.listenToRemoteInventoryChanges().listen((products) {
+      localDataSource.syncProducts(products);
+    });
+    syncPendingOperations();
+  }
+
+  void _initConnectivity() {
+    _connectivitySubscription = _connectivity.onConnectivityChanged.listen((List<ConnectivityResult> results) {
+      final isConnected = !results.contains(ConnectivityResult.none);
+      updateNetworkStatus(isConnected);
+    });
+  }
+
+  @override
+  void dispose() {
+    _connectivitySubscription?.cancel();
+    _remoteProductsSubscription?.cancel();
+    super.dispose();
   }
 
   /// Updates network status and triggers sync if online
@@ -53,7 +79,10 @@ class SyncManager extends ChangeNotifier {
       
       for (final operation in pendingOperations) {
         // Sequential processing (FIFO)
-        final result = await remoteDataSource.syncOperation(operation);
+        final result = await remoteDataSource.syncOperation(operation).timeout(
+          const Duration(seconds: 10),
+          onTimeout: () => SyncResult(success: false, errorMessage: 'Timeout de conexión'),
+        );
         
         if (result.success) {
           // If conflict was resolved with newer data from remote, we might update local DB here

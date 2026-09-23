@@ -17,6 +17,7 @@ class SyncResult {
 
 abstract class RemoteSyncDataSource {
   Future<SyncResult> syncOperation(SyncOperationModel operation);
+  Stream<List<Map<String, dynamic>>> listenToRemoteInventoryChanges();
 }
 
 class MockRemoteSyncDataSource implements RemoteSyncDataSource {
@@ -36,5 +37,10 @@ class MockRemoteSyncDataSource implements RemoteSyncDataSource {
     } catch (e) {
       return SyncResult(success: false, errorMessage: e.toString());
     }
+  }
+
+  @override
+  Stream<List<Map<String, dynamic>>> listenToRemoteInventoryChanges() {
+    return const Stream.empty();
   }
 }

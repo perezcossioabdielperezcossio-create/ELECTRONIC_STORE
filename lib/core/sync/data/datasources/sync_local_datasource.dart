@@ -1,4 +1,6 @@
+import 'package:sqflite/sqflite.dart';
 import '../../../../core/database/database_helper.dart';
+import '../../../../features/inventory/data/models/product_model.dart';
 import '../models/sync_operation_model.dart';
 
 abstract class SyncLocalDataSource {
@@ -6,6 +8,7 @@ abstract class SyncLocalDataSource {
   Future<List<SyncOperationModel>> getPendingOperations();
   Future<void> markAsSynced(String id);
   Future<void> markAsFailed(String id, String error);
+  Future<void> syncProducts(List<Map<String, dynamic>> products);
 }
 
 class SyncLocalDataSourceImpl implements SyncLocalDataSource {
@@ -33,13 +36,13 @@ class SyncLocalDataSourceImpl implements SyncLocalDataSource {
   @override
   Future<void> markAsSynced(String id) async {
     final db = await dbHelper.database;
-    await db.update(
+    await db.delete(
       'sync_queue',
-      {'status': 'SYNCED'},
       where: 'id = ?',
       whereArgs: [id],
     );
   }
+
 
   @override
   Future<void> markAsFailed(String id, String error) async {
@@ -62,4 +65,24 @@ class SyncLocalDataSourceImpl implements SyncLocalDataSource {
       whereArgs: [id],
     );
   }
+
+  @override
+  Future<void> syncProducts(List<Map<String, dynamic>> products) async {
+    final db = await dbHelper.database;
+    await db.transaction((txn) async {
+      for (final rawProduct in products) {
+        try {
+          final productModel = ProductModel.fromMap(rawProduct);
+          await txn.insert(
+            'products',
+            productModel.toMap(),
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        } catch (e) {
+          // ignore mapping errors for incomplete remote docs
+        }
+      }
+    });
+  }
+
 }
