@@ -13,6 +13,7 @@ import 'features/inventory/data/repositories/inventory_repository_impl.dart';
 import 'features/inventory/domain/usecases/get_all_products.dart';
 import 'features/inventory/domain/usecases/add_inventory_batch.dart';
 import 'features/inventory/domain/usecases/consume_stock_fifo.dart';
+import 'features/inventory/domain/usecases/create_product_with_lot_usecase.dart';
 import 'features/inventory/presentation/viewmodels/inventory_viewmodel.dart';
 
 import 'features/pos/domain/usecases/create_sale.dart';
@@ -53,6 +54,7 @@ void main() async {
   final getAllProducts = GetAllProducts(invRepo);
   final addLotUseCase = AddLotUseCase(invRepo);
   final consumeStockFifo = ConsumeStockFifo(invRepo);
+  final createProductWithLot = CreateProductWithLotUseCase(invRepo);
 
   // Dashboard
   final dashboardLocalDs = DashboardLocalDatasourceImpl(dbHelper);
@@ -69,6 +71,7 @@ void main() async {
             getAllProductsUseCase: getAllProducts,
             addLotUseCase: addLotUseCase,
             consumeStockUseCase: consumeStockFifo,
+            createProductWithLotUseCase: createProductWithLot,
           ),
         ),
         ChangeNotifierProvider(

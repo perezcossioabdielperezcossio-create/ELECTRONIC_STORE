@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../domain/entities/product.dart';
 import '../viewmodels/inventory_viewmodel.dart';
 import '../widgets/stock_status_badge.dart';
+import 'add_product_lot_sheet.dart';
+import 'add_lot_sheet.dart';
 
 class InventoryCatalogScreen extends StatefulWidget {
   final InventoryViewModel viewModel;
@@ -28,46 +31,115 @@ class _InventoryCatalogScreenState extends State<InventoryCatalogScreen> {
       appBar: AppBar(
         title: const Text('Catálogo de Inventario'),
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(60.0),
+          preferredSize: const Size.fromHeight(130.0),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-            child: Row(
+            child: Column(
               children: [
-                Expanded(
-                  child: TextField(
-                    decoration: InputDecoration(
-                      hintText: 'Buscar por SKU o Nombre...',
-                      prefixIcon: const Icon(Icons.search),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8.0),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 0),
-                    ),
-                    onChanged: (value) {
-                      widget.viewModel.setSearchQuery(value);
-                    },
-                  ),
-                ),
-                const SizedBox(width: 8.0),
                 ListenableBuilder(
                   listenable: widget.viewModel,
                   builder: (context, _) {
-                    return FilterChip(
-                      label: const Text('Reposición'),
-                      selected: widget.viewModel.showOnlyReplenishment,
-                      onSelected: (_) {
-                        widget.viewModel.toggleReplenishmentFilter();
-                      },
-                      selectedColor: Colors.amber.shade200,
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: Card(
+                            color: Colors.blue.shade50,
+                            child: Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Column(
+                                children: [
+                                  const Text('Capital Inmovilizado', style: TextStyle(fontSize: 12)),
+                                  Text('${widget.viewModel.totalCapitalInmovilizado.toStringAsFixed(2)} Bs', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Card(
+                            color: Colors.green.shade50,
+                            child: Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Column(
+                                children: [
+                                  const Text('Ganancia Potencial', style: TextStyle(fontSize: 12)),
+                                  Text('${widget.viewModel.gananciaPotencialEstimada.toStringAsFixed(2)} Bs', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     );
-                  },
+                  }
+                ),
+                const SizedBox(height: 8.0),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        decoration: InputDecoration(
+                          hintText: 'Buscar por SKU o Nombre...',
+                          prefixIcon: const Icon(Icons.search),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8.0),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                        ),
+                        onChanged: (value) {
+                          widget.viewModel.setSearchQuery(value);
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
         ),
       ),
-      body: ListenableBuilder(
+      body: Column(
+        children: [
+          ListenableBuilder(
+            listenable: widget.viewModel,
+            builder: (context, _) {
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  children: [
+                    ChoiceChip(
+                      label: const Text('Todos'),
+                      selected: widget.viewModel.filter == InventoryFilter.all,
+                      onSelected: (selected) {
+                        if (selected) widget.viewModel.setFilter(InventoryFilter.all);
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    ChoiceChip(
+                      label: const Text('Stock Bajo'),
+                      selected: widget.viewModel.filter == InventoryFilter.lowStock,
+                      onSelected: (selected) {
+                        if (selected) widget.viewModel.setFilter(InventoryFilter.lowStock);
+                      },
+                      selectedColor: Colors.orange.shade200,
+                    ),
+                    const SizedBox(width: 8),
+                    ChoiceChip(
+                      label: const Text('Agotados'),
+                      selected: widget.viewModel.filter == InventoryFilter.outOfStock,
+                      onSelected: (selected) {
+                        if (selected) widget.viewModel.setFilter(InventoryFilter.outOfStock);
+                      },
+                      selectedColor: Colors.red.shade200,
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          Expanded(
+            child: ListenableBuilder(
         listenable: widget.viewModel,
         builder: (context, _) {
           if (widget.viewModel.state == ViewState.loading) {
@@ -100,6 +172,20 @@ class _InventoryCatalogScreenState extends State<InventoryCatalogScreen> {
             },
           );
         },
+      ),
+    ),
+  ],
+),
+floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            builder: (_) => AddProductLotSheet(viewModel: widget.viewModel),
+          );
+        },
+        icon: const Icon(Icons.add),
+        label: const Text('Nuevo Producto'),
       ),
     );
   }
@@ -167,6 +253,29 @@ class _ProductCard extends StatelessWidget {
               padding: EdgeInsets.all(16.0),
               child: Text('No hay lotes activos para este producto.'),
             ),
+          const Divider(),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () {
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      builder: (_) => AddLotSheet(
+                        viewModel: context.read<InventoryViewModel>(),
+                        product: product,
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.add_shopping_cart, size: 18),
+                  label: const Text('Abastecer Lote'),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
