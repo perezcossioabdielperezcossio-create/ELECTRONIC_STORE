@@ -3,8 +3,14 @@ import 'package:provider/provider.dart';
 
 import 'core/database/database_helper.dart';
 import 'core/sync/data/datasources/sync_local_datasource.dart';
-import 'core/sync/data/datasources/remote_sync_datasource.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'core/sync/data/datasources/firestore_remote_data_source.dart';
 import 'core/sync/domain/services/sync_manager.dart';
+
+import 'features/promoters/data/datasources/promoter_local_datasource.dart';
+import 'features/promoters/data/repositories/promoter_repository_impl.dart';
+import 'features/promoters/domain/usecases/get_all_promoters.dart';
+import 'features/promoters/presentation/viewmodels/promoters_viewmodel.dart';
 
 import 'features/pos/data/datasources/pos_local_datasource.dart';
 import 'features/pos/data/repositories/pos_repository_impl.dart';
@@ -14,10 +20,13 @@ import 'features/inventory/domain/usecases/get_all_products.dart';
 import 'features/inventory/domain/usecases/add_inventory_batch.dart';
 import 'features/inventory/domain/usecases/consume_stock_fifo.dart';
 import 'features/inventory/domain/usecases/create_product_with_lot_usecase.dart';
+import 'features/inventory/domain/usecases/update_product_usecase.dart';
+import 'features/inventory/domain/usecases/delete_product_usecase.dart';
 import 'features/inventory/presentation/viewmodels/inventory_viewmodel.dart';
 
 import 'features/pos/domain/usecases/create_sale.dart';
 import 'features/pos/domain/usecases/void_sale_usecase.dart';
+import 'features/pos/domain/usecases/get_sales_by_date.dart';
 import 'features/pos/presentation/viewmodels/pos_viewmodel.dart';
 
 import 'features/dashboard/data/datasources/dashboard_local_datasource.dart';
@@ -46,19 +55,20 @@ void main() async {
   
   final dbHelper = DatabaseHelper.instance;
   
-  // Sync
+  // Sync (P-04: Firestore Remote DataSource Real)
   final syncLocalDs = SyncLocalDataSourceImpl(dbHelper: dbHelper);
-  final remoteSyncDs = MockRemoteSyncDataSource();
+  final remoteSyncDs = FirestoreRemoteDataSource(firestore: FirebaseFirestore.instance);
   final syncManager = SyncManager(
     localDataSource: syncLocalDs, 
     remoteDataSource: remoteSyncDs,
-  );
+  )..startRealtimeSync();
   
   // POS
   final posLocalDs = PosLocalDatasourceImpl(dbHelper);
   final posRepo = PosRepositoryImpl(posLocalDs);
   final createSale = CreateSale(posRepo);
   final voidSale = VoidSaleUseCase(posRepo);
+  final getSalesByDate = GetSalesByDate(posRepo);
   
   // Inventory
   final db = await dbHelper.database;
@@ -68,12 +78,19 @@ void main() async {
   final addLotUseCase = AddLotUseCase(invRepo);
   final consumeStockFifo = ConsumeStockFifo(invRepo);
   final createProductWithLot = CreateProductWithLotUseCase(invRepo);
+  final updateProductUseCase = UpdateProductUseCase(invRepo);
+  final deleteProductUseCase = DeleteProductUseCase(invRepo);
 
   // Dashboard
   final dashboardLocalDs = DashboardLocalDatasourceImpl(dbHelper);
   final dashboardRepo = DashboardRepositoryImpl(dashboardLocalDs);
   final getFinancialOverview = GetFinancialOverviewUseCase(dashboardRepo);
   final getDailyCashAudit = GetDailyCashAuditUseCase(dashboardRepo);
+
+  // Promoters (P-02)
+  final promoterLocalDs = PromoterLocalDatasourceImpl(dbHelper);
+  final promoterRepo = PromoterRepositoryImpl(promoterLocalDs);
+  final getAllPromoters = GetAllPromoters(promoterRepo);
 
   runApp(
     MultiProvider(
@@ -85,6 +102,8 @@ void main() async {
             addLotUseCase: addLotUseCase,
             consumeStockUseCase: consumeStockFifo,
             createProductWithLotUseCase: createProductWithLot,
+            updateProductUseCase: updateProductUseCase,
+            deleteProductUseCase: deleteProductUseCase,
           ),
         ),
         ChangeNotifierProvider(
@@ -98,6 +117,12 @@ void main() async {
           create: (_) => DashboardViewModel(
             getFinancialOverview: getFinancialOverview,
             getDailyCashAudit: getDailyCashAudit,
+            getSalesByDate: getSalesByDate,
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => PromotersViewModel(
+            getAll: getAllPromoters,
           ),
         ),
       ],

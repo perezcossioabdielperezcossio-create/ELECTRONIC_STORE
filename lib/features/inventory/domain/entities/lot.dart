@@ -6,6 +6,7 @@ class Lot {
   final int initialQuantity;
   final int currentQuantity;
   final double realUnitCost;
+  final double? promoterBasePrice;
 
   const Lot({
     required this.id,
@@ -14,13 +15,18 @@ class Lot {
     required this.initialQuantity,
     required this.currentQuantity,
     required this.realUnitCost,
+    this.promoterBasePrice,
   })  : assert(initialQuantity >= 0, 'Initial quantity cannot be negative'),
         assert(currentQuantity >= 0, 'Current quantity cannot be negative'),
         assert(
           currentQuantity <= initialQuantity,
           'Current quantity cannot exceed initial quantity',
         ),
-        assert(realUnitCost >= 0, 'Real unit cost cannot be negative');
+        assert(realUnitCost >= 0, 'Real unit cost cannot be negative'),
+        assert(
+          promoterBasePrice == null || promoterBasePrice >= 0,
+          'Promoter base price cannot be negative',
+        );
 
   /// Indicates if this lot still has available stock.
   bool get isActive => currentQuantity > 0;
@@ -35,6 +41,7 @@ class Lot {
     int? initialQuantity,
     int? currentQuantity,
     double? realUnitCost,
+    double? promoterBasePrice,
   }) {
     return Lot(
       id: id ?? this.id,
@@ -43,6 +50,7 @@ class Lot {
       initialQuantity: initialQuantity ?? this.initialQuantity,
       currentQuantity: currentQuantity ?? this.currentQuantity,
       realUnitCost: realUnitCost ?? this.realUnitCost,
+      promoterBasePrice: promoterBasePrice ?? this.promoterBasePrice,
     );
   }
 }

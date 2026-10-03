@@ -2,12 +2,15 @@ import 'package:flutter/foundation.dart';
 import '../../domain/usecases/get_financial_overview_usecase.dart';
 import '../../domain/usecases/get_daily_cash_audit_usecase.dart';
 import '../../data/models/financial_metrics_model.dart';
+import '../../../pos/domain/entities/sale.dart';
+import '../../../pos/domain/usecases/get_sales_by_date.dart';
 
 enum DashboardState { initial, loading, loaded, error }
 
 class DashboardViewModel extends ChangeNotifier {
   final GetFinancialOverviewUseCase getFinancialOverview;
   final GetDailyCashAuditUseCase getDailyCashAudit;
+  final GetSalesByDate? getSalesByDate;
 
   DashboardState _state = DashboardState.initial;
   DashboardState get state => _state;
@@ -21,12 +24,16 @@ class DashboardViewModel extends ChangeNotifier {
   ArqueoDiario? _arqueoDiario;
   ArqueoDiario? get arqueoDiario => _arqueoDiario;
 
+  List<Sale> _dailySales = [];
+  List<Sale> get dailySales => List.unmodifiable(_dailySales);
+
   DateTime _selectedDate = DateTime.now();
   DateTime get selectedDate => _selectedDate;
 
   DashboardViewModel({
     required this.getFinancialOverview,
     required this.getDailyCashAudit,
+    this.getSalesByDate,
   });
 
   Future<void> loadDashboardData() async {
@@ -35,6 +42,14 @@ class DashboardViewModel extends ChangeNotifier {
 
     final overviewResult = await getFinancialOverview();
     final arqueoResult = await getDailyCashAudit(date: _selectedDate);
+
+    if (getSalesByDate != null) {
+      final salesResult = await getSalesByDate!(DateParams(_selectedDate));
+      salesResult.fold(
+        (_) => _dailySales = [],
+        (sales) => _dailySales = sales,
+      );
+    }
 
     overviewResult.fold(
       (failure) {

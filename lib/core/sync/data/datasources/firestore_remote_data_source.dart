@@ -20,15 +20,33 @@ class FirestoreRemoteDataSource implements RemoteSyncDataSource {
       payloadMap['clientTimestamp'] = operation.createdAt;
       payloadMap['lastModified'] = operation.createdAt; // Use creation time as last modification timestamp for sync
 
-      if (operation.tableName == 'products') {
-        final product = ProductModel.fromMap(payloadMap);
-        await pushProduct(product, operation.operation);
-      } else if (operation.tableName == 'lots') {
-        final lot = LotModel.fromMap(payloadMap);
-        await pushLot(lot, operation.operation);
-      } else if (operation.tableName == 'sales') {
-        final sale = SaleModel.fromMap(payloadMap);
-        await pushSale(sale, operation.operation);
+      if (operation.tableName == 'products' || operation.tableName == 'productos') {
+        if (operation.operation == 'DELETE') {
+          final sku = (payloadMap['sku'] as String?) ?? (payloadMap['id'] as String);
+          await deleteProduct(sku);
+        } else {
+          final product = ProductModel.fromMap(payloadMap);
+          await pushProduct(product, operation.operation);
+        }
+      } else if (operation.tableName == 'lots' || operation.tableName == 'lotes') {
+        if (operation.operation == 'DELETE') {
+          final lotId = (payloadMap['id'] as String?) ?? operation.id;
+          await firestore.collection('lots').doc(lotId).delete();
+        } else if (operation.operation == 'UPDATE') {
+          final lotId = (payloadMap['id'] as String?) ?? operation.id;
+          await firestore.collection('lots').doc(lotId).set(payloadMap, SetOptions(merge: true));
+        } else {
+          final lot = LotModel.fromMap(payloadMap);
+          await pushLot(lot, operation.operation);
+        }
+      } else if (operation.tableName == 'sales' || operation.tableName == 'ventas') {
+        if (operation.operation == 'DELETE') {
+          final saleId = (payloadMap['id'] as String?) ?? operation.id;
+          await firestore.collection('sales').doc(saleId).delete();
+        } else {
+          final sale = SaleModel.fromMap(payloadMap);
+          await pushSale(sale, operation.operation, payloadMap);
+        }
       } else {
         return SyncResult(success: false, errorMessage: 'Unknown table: ${operation.tableName}');
       }
@@ -40,10 +58,23 @@ class FirestoreRemoteDataSource implements RemoteSyncDataSource {
     }
   }
 
+  Future<void> deleteProduct(String sku) async {
+    // Eliminar el documento en la colección 'products'
+    await firestore.collection('products').doc(sku).delete();
+    
+    // Eliminar los lotes asociados en la colección 'lots'
+    final lotsQuery = await firestore.collection('lots').where('productSku', isEqualTo: sku).get();
+    final batch = firestore.batch();
+    for (var doc in lotsQuery.docs) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
+  }
+
   Future<void> pushProduct(ProductModel product, String operationType) async {
     final docRef = firestore.collection('products').doc(product.sku); // ID = sku
     if (operationType == 'DELETE') {
-      await docRef.delete();
+      await deleteProduct(product.sku);
     } else {
       await docRef.set(product.toMap(), SetOptions(merge: true));
     }
@@ -58,22 +89,43 @@ class FirestoreRemoteDataSource implements RemoteSyncDataSource {
     }
   }
 
-  Future<void> pushSale(SaleModel sale, String operationType) async {
+  Future<void> pushSale(SaleModel sale, String operationType, [Map<String, dynamic>? fullPayload]) async {
     final docRef = firestore.collection('sales').doc(sale.id);
     if (operationType == 'DELETE') {
       await docRef.delete();
     } else {
-      await docRef.set(sale.toMap(), SetOptions(merge: true));
+      final mapToSet = fullPayload ?? sale.toMap();
+      await docRef.set(mapToSet, SetOptions(merge: true));
     }
+  }
+
+  /// Listen to remote changes for Products
+  @override
+  Stream<List<Map<String, dynamic>>> listenToRemoteProducts() {
+    return firestore.collection('products').snapshots().map((snapshot) {
+      return snapshot.docs.map((doc) => doc.data()).toList();
+    });
+  }
+
+  /// Listen to remote changes for Lots
+  @override
+  Stream<List<Map<String, dynamic>>> listenToRemoteLots() {
+    return firestore.collection('lots').snapshots().map((snapshot) {
+      return snapshot.docs.map((doc) => doc.data()).toList();
+    });
+  }
+
+  /// Listen to remote changes for Sales
+  @override
+  Stream<List<Map<String, dynamic>>> listenToRemoteSales() {
+    return firestore.collection('sales').snapshots().map((snapshot) {
+      return snapshot.docs.map((doc) => doc.data()).toList();
+    });
   }
 
   /// Listen to remote changes for Reactive UI/Real-time Updates (RNF-02)
   @override
   Stream<List<Map<String, dynamic>>> listenToRemoteInventoryChanges() {
-    // For example, listen to 'products' collection changes.
-    // In a full implementation, you might yield merged events from products and lots.
-    return firestore.collection('products').snapshots().map((snapshot) {
-      return snapshot.docs.map((doc) => doc.data()).toList();
-    });
+    return listenToRemoteProducts();
   }
 }

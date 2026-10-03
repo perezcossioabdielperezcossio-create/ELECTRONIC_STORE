@@ -11,6 +11,8 @@ abstract class InventoryLocalDataSource {
   Future<ProductModel?> getProductBySku(String sku);
   Future<List<ProductModel>> getActiveInventory();
 
+  Future<void> updateProduct(ProductModel product);
+  Future<void> deleteProduct(String productId);
   Future<List<LotModel>> consumeStock(String productId, int quantity);
   Future<List<ProductModel>> getAllProducts();
 }
@@ -123,8 +125,79 @@ class InventoryLocalDataSourceImpl implements InventoryLocalDataSource {
 
   @override
   Future<List<ProductModel>> getAllProducts() async {
-    final maps = await database.query('products', where: 'is_active = 1');
-    return maps.map((m) => ProductModel.fromMap(m)).toList();
+    final productsResult = await database.query('products', where: 'is_active = 1');
+    final List<ProductModel> inventory = [];
+
+    for (final productMap in productsResult) {
+      final productId = productMap['id'] as String;
+      
+      final lotsResult = await database.query(
+        'lots',
+        where: 'product_id = ? AND current_quantity > 0',
+        whereArgs: [productId],
+        orderBy: 'purchase_date ASC',
+      );
+      
+      final lots = lotsResult.map((lotMap) => LotModel.fromMap(lotMap)).toList();
+      inventory.add(ProductModel.fromMap(productMap, lots: lots));
+    }
+    
+    return inventory;
+  }
+
+  @override
+  Future<void> updateProduct(ProductModel product) async {
+    await database.transaction((txn) async {
+      await txn.update(
+        'products',
+        product.toMap(),
+        where: 'id = ?',
+        whereArgs: [product.id],
+      );
+      await txn.insert('sync_queue', {
+        'id': const Uuid().v4(),
+        'table_name': 'products',
+        'operation': 'UPDATE',
+        'payload': jsonEncode(product.toMap()),
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+        'status': 'PENDING',
+        'retry_count': 0,
+      });
+    });
+  }
+
+  @override
+  Future<void> deleteProduct(String productId) async {
+    await database.transaction((txn) async {
+      final prodQuery = await txn.query('products', where: 'id = ?', whereArgs: [productId], limit: 1);
+      final sku = prodQuery.isNotEmpty ? (prodQuery.first['sku'] as String) : productId;
+
+      // Borrado en cascada (producto + lotes) con encolado en sync_queue
+      final lots = await txn.query('lots', where: 'product_id = ?', whereArgs: [productId]);
+      for (final lot in lots) {
+        await txn.insert('sync_queue', {
+          'id': const Uuid().v4(),
+          'table_name': 'lots',
+          'operation': 'DELETE',
+          'payload': jsonEncode({'id': lot['id'], 'productSku': sku}),
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+          'status': 'PENDING',
+          'retry_count': 0,
+        });
+      }
+      await txn.delete('lots', where: 'product_id = ?', whereArgs: [productId]);
+      await txn.delete('products', where: 'id = ?', whereArgs: [productId]);
+      
+      await txn.insert('sync_queue', {
+        'id': const Uuid().v4(),
+        'table_name': 'products',
+        'operation': 'DELETE',
+        'payload': jsonEncode({'id': productId, 'sku': sku}),
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+        'status': 'PENDING',
+        'retry_count': 0,
+      });
+    });
   }
 
   @override

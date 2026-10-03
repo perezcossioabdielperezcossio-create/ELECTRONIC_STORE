@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:uuid/uuid.dart';
 import '../../../../core/database/database_helper.dart';
 import '../models/sale_model.dart';
+import '../../domain/entities/sale_item.dart';
 import '../../../../core/errors/exceptions.dart';
 
 abstract class PosLocalDatasource {
@@ -37,12 +38,25 @@ class PosLocalDatasourceImpl implements PosLocalDatasource {
   Future<void> processSale(SaleModel model) async {
     final db = await dbHelper.database;
     await db.transaction((txn) async {
+      final saleMap = model.toMap();
+      final itemsPayload = model.items.map((i) => {
+        'id': '${model.id}_${i.productId}',
+        'sale_id': model.id,
+        'product_id': i.productId,
+        'product_name': i.productName,
+        'quantity': i.quantity,
+        'unit_price': i.unitPrice,
+        'unit_cost': i.unitCost,
+        'line_discount': i.lineDiscount,
+      }).toList();
+      saleMap['items'] = itemsPayload;
+
       await txn.insert('sales', model.toMap());
       await txn.insert('sync_queue', {
         'id': const Uuid().v4(),
         'table_name': 'sales',
         'operation': 'CREATE',
-        'payload': jsonEncode(model.toMap()),
+        'payload': jsonEncode(saleMap),
         'created_at': DateTime.now().toUtc().toIso8601String(),
         'status': 'PENDING',
         'retry_count': 0,
@@ -80,6 +94,16 @@ class PosLocalDatasourceImpl implements PosLocalDatasource {
             where: 'id = ?',
             whereArgs: [lotId],
           );
+
+          await txn.insert('sync_queue', {
+            'id': const Uuid().v4(),
+            'table_name': 'lots',
+            'operation': 'UPDATE',
+            'payload': jsonEncode({'id': lotId, 'current_quantity': currentQuantity - qtyToConsume}),
+            'created_at': DateTime.now().toUtc().toIso8601String(),
+            'status': 'PENDING',
+            'retry_count': 0,
+          });
 
           remainingQuantity -= qtyToConsume;
         }
@@ -119,7 +143,19 @@ class PosLocalDatasourceImpl implements PosLocalDatasource {
   Future<SaleModel> getSaleById(String id) async {
     final db   = await dbHelper.database;
     final maps = await db.query('sales', where: 'id = ?', whereArgs: [id]);
-    return SaleModel.fromMap(maps.first);
+    if (maps.isEmpty) {
+      throw Exception('Sale not found: $id');
+    }
+    final itemsMaps = await db.query('sale_items', where: 'sale_id = ?', whereArgs: [id]);
+    final items = itemsMaps.map((im) => SaleItem(
+      productId: im['product_id'] as String,
+      productName: im['product_name'] as String,
+      quantity: im['quantity'] as int,
+      unitPrice: (im['unit_price'] as num).toDouble(),
+      unitCost: (im['unit_cost'] as num?)?.toDouble() ?? 0.0,
+      lineDiscount: (im['line_discount'] as num?)?.toDouble() ?? 0.0,
+    )).toList();
+    return SaleModel.fromMap(maps.first, items: items);
   }
 
   @override
@@ -131,8 +167,23 @@ class PosLocalDatasourceImpl implements PosLocalDatasource {
       'sales',
       where:     'created_at >= ? AND created_at < ?',
       whereArgs: [start.toIso8601String(), end.toIso8601String()],
+      orderBy:   'created_at DESC',
     );
-    return maps.map((m) => SaleModel.fromMap(m)).toList();
+    final sales = <SaleModel>[];
+    for (final m in maps) {
+      final saleId = m['id'] as String;
+      final itemsMaps = await db.query('sale_items', where: 'sale_id = ?', whereArgs: [saleId]);
+      final items = itemsMaps.map((im) => SaleItem(
+        productId: im['product_id'] as String,
+        productName: im['product_name'] as String,
+        quantity: im['quantity'] as int,
+        unitPrice: (im['unit_price'] as num).toDouble(),
+        unitCost: (im['unit_cost'] as num?)?.toDouble() ?? 0.0,
+        lineDiscount: (im['line_discount'] as num?)?.toDouble() ?? 0.0,
+      )).toList();
+      sales.add(SaleModel.fromMap(m, items: items));
+    }
+    return sales;
   }
 
   @override

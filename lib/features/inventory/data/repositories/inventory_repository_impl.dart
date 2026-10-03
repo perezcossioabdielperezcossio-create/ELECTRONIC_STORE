@@ -75,4 +75,25 @@ class InventoryRepositoryImpl implements InventoryRepository {
       return Left(DatabaseFailure('Error getting products: \$e'));
     }
   }
+
+  @override
+  Future<Either<Failure, Unit>> updateProduct(Product product) async {
+    try {
+      final productModel = ProductModel.fromEntity(product);
+      await localDataSource.updateProduct(productModel);
+      return const Right(unit);
+    } catch (e) {
+      return Left(DatabaseFailure('Error updating product: \$e'));
+    }
+  }
+
+  @override
+  Future<Either<Failure, Unit>> deleteProduct(String productId) async {
+    try {
+      await localDataSource.deleteProduct(productId);
+      return const Right(unit);
+    } catch (e) {
+      return Left(DatabaseFailure('Error deleting product: \$e'));
+    }
+  }
 }

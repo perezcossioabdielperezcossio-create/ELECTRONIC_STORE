@@ -5,6 +5,8 @@ import '../../domain/usecases/get_all_products.dart';
 import '../../domain/usecases/add_inventory_batch.dart';
 import '../../domain/usecases/consume_stock_fifo.dart';
 import '../../domain/usecases/create_product_with_lot_usecase.dart';
+import '../../domain/usecases/update_product_usecase.dart';
+import '../../domain/usecases/delete_product_usecase.dart';
 import '../../../../core/usecases/usecase.dart';
 
 enum ViewState { idle, loading, error }
@@ -15,12 +17,16 @@ class InventoryViewModel extends ChangeNotifier {
   final AddLotUseCase addLotUseCase;
   final ConsumeStockFifo  consumeStockUseCase;
   final CreateProductWithLotUseCase createProductWithLotUseCase;
+  final UpdateProductUseCase updateProductUseCase;
+  final DeleteProductUseCase deleteProductUseCase;
 
   InventoryViewModel({
     required this.getAllProductsUseCase,
     required this.addLotUseCase,
     required this.consumeStockUseCase,
     required this.createProductWithLotUseCase,
+    required this.updateProductUseCase,
+    required this.deleteProductUseCase,
   });
 
   ViewState           _state    = ViewState.idle;
@@ -99,7 +105,11 @@ class InventoryViewModel extends ChangeNotifier {
 
   Future<bool> addLot(String productId, Lot lot) async {
     final result = await addLotUseCase(AddLotParams(productId: productId, lot: lot));
-    return result.isRight();
+    if (result.isRight()) {
+      await loadProducts();
+      return true;
+    }
+    return false;
   }
 
   Future<bool> consumeStock(String productId, int quantity) async {
@@ -118,5 +128,35 @@ class InventoryViewModel extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  Future<bool> updateProduct(Product product) async {
+    final result = await updateProductUseCase(UpdateProductParams(product: product));
+    return result.fold(
+      (failure) {
+        _errorMessage = failure.message;
+        notifyListeners();
+        return false;
+      },
+      (_) async {
+        await loadProducts();
+        return true;
+      },
+    );
+  }
+
+  Future<bool> deleteProduct(String productId) async {
+    final result = await deleteProductUseCase(DeleteProductParams(productId: productId));
+    return result.fold(
+      (failure) {
+        _errorMessage = failure.message;
+        notifyListeners();
+        return false;
+      },
+      (_) async {
+        await loadProducts();
+        return true;
+      },
+    );
   }
 }

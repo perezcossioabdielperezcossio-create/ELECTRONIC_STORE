@@ -205,6 +205,7 @@ class PosViewModel extends ChangeNotifier {
         clearCart();
         _globalDiscount = 0.0;
         _error = null;
+        loadProducts(); // Refresh products to reflect new stock
       },
     );
     notifyListeners();

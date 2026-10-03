@@ -10,13 +10,17 @@ class SyncManager extends ChangeNotifier {
   final Connectivity _connectivity = Connectivity();
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   StreamSubscription<List<Map<String, dynamic>>>? _remoteProductsSubscription;
-  
+  StreamSubscription<List<Map<String, dynamic>>>? _remoteLotsSubscription;
+  StreamSubscription<List<Map<String, dynamic>>>? _remoteSalesSubscription;
+  final StreamController<void> _remoteDataChangedController = StreamController<void>.broadcast();
+
   bool _isSyncing = false;
   bool _isOnline = true; // Will be updated by connectivity_plus
   int _pendingCount = 0;
 
   bool get isOnline => _isOnline;
   int get pendingCount => _pendingCount;
+  Stream<void> get onRemoteDataChanged => _remoteDataChangedController.stream;
 
   SyncManager({
     required this.localDataSource,
@@ -26,11 +30,35 @@ class SyncManager extends ChangeNotifier {
     _refreshPendingCount();
   }
 
-  void initialize() {
-    _remoteProductsSubscription = remoteDataSource.listenToRemoteInventoryChanges().listen((products) {
-      localDataSource.syncProducts(products);
+  /// Start real-time Firestore listeners for products, lots, and sales (Live 2-Device Sync)
+  void startRealtimeSync() {
+    _remoteProductsSubscription?.cancel();
+    _remoteLotsSubscription?.cancel();
+    _remoteSalesSubscription?.cancel();
+
+    _remoteProductsSubscription = remoteDataSource.listenToRemoteProducts().listen((products) async {
+      await localDataSource.syncProducts(products);
+      _remoteDataChangedController.add(null);
+      notifyListeners();
     });
+
+    _remoteLotsSubscription = remoteDataSource.listenToRemoteLots().listen((lots) async {
+      await localDataSource.syncLots(lots);
+      _remoteDataChangedController.add(null);
+      notifyListeners();
+    });
+
+    _remoteSalesSubscription = remoteDataSource.listenToRemoteSales().listen((sales) async {
+      await localDataSource.syncSales(sales);
+      _remoteDataChangedController.add(null);
+      notifyListeners();
+    });
+
     syncPendingOperations();
+  }
+
+  void initialize() {
+    startRealtimeSync();
   }
 
   void _initConnectivity() {
@@ -44,6 +72,9 @@ class SyncManager extends ChangeNotifier {
   void dispose() {
     _connectivitySubscription?.cancel();
     _remoteProductsSubscription?.cancel();
+    _remoteLotsSubscription?.cancel();
+    _remoteSalesSubscription?.cancel();
+    _remoteDataChangedController.close();
     super.dispose();
   }
 

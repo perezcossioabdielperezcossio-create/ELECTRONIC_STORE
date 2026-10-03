@@ -44,15 +44,36 @@ class _CheckoutBottomSheetState extends State<CheckoutBottomSheet> {
                 
                 // Método de pago
                 const Text('Método de Pago', style: TextStyle(fontWeight: FontWeight.bold)),
-                SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(value: 'EFECTIVO', label: Text('Efectivo')),
-                    ButtonSegment(value: 'TRANSFERENCIA', label: Text('Transferencia')),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('Efectivo'),
+                      avatar: const Icon(Icons.payments, size: 16),
+                      selected: viewModel.paymentMethod == 'EFECTIVO',
+                      onSelected: (_) => viewModel.setPaymentMethod('EFECTIVO'),
+                    ),
+                    ChoiceChip(
+                      label: const Text('QR'),
+                      avatar: const Icon(Icons.qr_code, size: 16),
+                      selected: viewModel.paymentMethod == 'QR',
+                      onSelected: (_) => viewModel.setPaymentMethod('QR'),
+                    ),
+                    ChoiceChip(
+                      label: const Text('Transferencia'),
+                      avatar: const Icon(Icons.account_balance, size: 16),
+                      selected: viewModel.paymentMethod == 'TRANSFERENCIA',
+                      onSelected: (_) => viewModel.setPaymentMethod('TRANSFERENCIA'),
+                    ),
+                    ChoiceChip(
+                      label: const Text('Tarjeta'),
+                      avatar: const Icon(Icons.credit_card, size: 16),
+                      selected: viewModel.paymentMethod == 'TARJETA',
+                      onSelected: (_) => viewModel.setPaymentMethod('TARJETA'),
+                    ),
                   ],
-                  selected: {viewModel.paymentMethod},
-                  onSelectionChanged: (Set<String> newSelection) {
-                    viewModel.setPaymentMethod(newSelection.first);
-                  },
                 ),
                 const SizedBox(height: 16),
 

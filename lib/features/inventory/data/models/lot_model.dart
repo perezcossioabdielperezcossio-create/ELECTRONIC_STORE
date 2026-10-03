@@ -8,6 +8,7 @@ class LotModel extends Lot {
     required super.initialQuantity,
     required super.currentQuantity,
     required super.realUnitCost,
+    super.promoterBasePrice,
   });
 
   factory LotModel.fromMap(Map<String, dynamic> map) {
@@ -18,6 +19,9 @@ class LotModel extends Lot {
       initialQuantity: map['initial_quantity'] as int,
       currentQuantity: map['current_quantity'] as int,
       realUnitCost: (map['real_unit_cost'] as num).toDouble(),
+      promoterBasePrice: map['promoter_base_price'] != null
+          ? (map['promoter_base_price'] as num).toDouble()
+          : null,
     );
   }
 
@@ -29,6 +33,7 @@ class LotModel extends Lot {
       'initial_quantity': initialQuantity,
       'current_quantity': currentQuantity,
       'real_unit_cost': realUnitCost,
+      'promoter_base_price': promoterBasePrice,
     };
   }
 
@@ -40,6 +45,7 @@ class LotModel extends Lot {
       initialQuantity: lot.initialQuantity,
       currentQuantity: lot.currentQuantity,
       realUnitCost: lot.realUnitCost,
+      promoterBasePrice: lot.promoterBasePrice,
     );
   }
 }

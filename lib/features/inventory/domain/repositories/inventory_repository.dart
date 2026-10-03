@@ -23,6 +23,8 @@ abstract class InventoryRepository {
   /// Retrieves all products that are considered part of the active inventory.
   Future<List<Product>> getActiveInventory();
 
+  Future<Either<Failure, Unit>> updateProduct(Product product);
+  Future<Either<Failure, Unit>> deleteProduct(String productId);
   Future<Either<Failure, List<Lot>>> consumeStock(String productId, int quantity);
   Future<Either<Failure, List<Product>>> getAllProducts();
 }
