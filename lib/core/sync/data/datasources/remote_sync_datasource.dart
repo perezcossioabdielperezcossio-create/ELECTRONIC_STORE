@@ -17,24 +17,32 @@ class SyncResult {
 
 abstract class RemoteSyncDataSource {
   Future<SyncResult> syncOperation(SyncOperationModel operation);
+  Stream<List<Map<String, dynamic>>> listenToRemoteProducts();
+  Stream<List<Map<String, dynamic>>> listenToRemoteLots();
+  Stream<List<Map<String, dynamic>>> listenToRemoteSales();
+  Stream<List<Map<String, dynamic>>> listenToRemoteInventoryChanges();
 }
 
 class MockRemoteSyncDataSource implements RemoteSyncDataSource {
+  bool shouldSucceed = true;
+
   @override
   Future<SyncResult> syncOperation(SyncOperationModel operation) async {
-    // Simulate network delay
-    await Future.delayed(const Duration(milliseconds: 100));
-
-    // Try to extract an ID from payload to mock conflict resolution
-    // Note: This is simplified. In a real app we'd parse the payload JSON 
-    // or include recordId in the SyncOperationModel.
-    try {
-      // Simulate checking timestamp for First-Write-Wins
-      // Let's assume operation.createdAt is the timestamp we check
-      // For testing, we randomly succeed.
-      return SyncResult(success: true);
-    } catch (e) {
-      return SyncResult(success: false, errorMessage: e.toString());
+    if (!shouldSucceed) {
+      return SyncResult(success: false, errorMessage: 'Mock failure');
     }
+    return SyncResult(success: true);
   }
+
+  @override
+  Stream<List<Map<String, dynamic>>> listenToRemoteProducts() => const Stream.empty();
+
+  @override
+  Stream<List<Map<String, dynamic>>> listenToRemoteLots() => const Stream.empty();
+
+  @override
+  Stream<List<Map<String, dynamic>>> listenToRemoteSales() => const Stream.empty();
+
+  @override
+  Stream<List<Map<String, dynamic>>> listenToRemoteInventoryChanges() => const Stream.empty();
 }

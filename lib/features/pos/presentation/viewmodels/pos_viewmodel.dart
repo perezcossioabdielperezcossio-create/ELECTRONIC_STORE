@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../../domain/entities/sale.dart';
@@ -7,17 +8,36 @@ import '../../domain/usecases/void_sale_usecase.dart';
 import '../../../../core/usecases/usecase.dart';
 import '../../../inventory/domain/entities/product.dart';
 import '../../../inventory/domain/usecases/get_all_products.dart';
+import '../../../../core/sync/domain/services/sync_manager.dart';
 
 class PosViewModel extends ChangeNotifier {
   final CreateSale createSale;
   final GetAllProducts getAllProducts;
   final VoidSaleUseCase voidSaleUseCase;
+  final SyncManager? syncManager;
+
+  StreamSubscription? _syncSubscription;
 
   PosViewModel({
     required this.createSale,
     required this.getAllProducts,
     required this.voidSaleUseCase,
-  });
+    this.syncManager,
+  }) {
+    _initSyncListener();
+  }
+
+  void _initSyncListener() {
+    _syncSubscription = syncManager?.onRemoteDataChanged.listen((_) {
+      loadProducts();
+    });
+  }
+
+  @override
+  void dispose() {
+    _syncSubscription?.cancel();
+    super.dispose();
+  }
 
   // Catálogo y Búsqueda
   List<Product> _allProducts = [];
@@ -205,6 +225,8 @@ class PosViewModel extends ChangeNotifier {
         clearCart();
         _globalDiscount = 0.0;
         _error = null;
+        loadProducts(); // Refresh products to reflect new stock
+        syncManager?.syncPendingOperations();
       },
     );
     notifyListeners();
@@ -220,7 +242,11 @@ class PosViewModel extends ChangeNotifier {
     
     result.fold(
       (f) => _error = f.message,
-      (_) => _error = null,
+      (_) {
+        _error = null;
+        loadProducts();
+        syncManager?.syncPendingOperations();
+      },
     );
     notifyListeners();
     return result.isRight();

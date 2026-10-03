@@ -27,6 +27,7 @@ class _AddProductLotSheetState extends State<AddProductLotSheet> {
 
   int _quantity = 0;
   double _unitCost = 0.0;
+  double? _promoterBasePrice;
 
   bool _isSaving = false;
   Product? _existingProduct;
@@ -56,7 +57,6 @@ class _AddProductLotSheetState extends State<AddProductLotSheet> {
         category: _category,
         standardSellingPrice: _salePrice,
         minStockThreshold: _minStock,
-        // Optional params will default or remain null appropriately
       );
 
       final newLot = Lot(
@@ -66,6 +66,7 @@ class _AddProductLotSheetState extends State<AddProductLotSheet> {
         initialQuantity: _quantity,
         currentQuantity: _quantity,
         realUnitCost: _unitCost,
+        promoterBasePrice: _promoterBasePrice,
       );
 
       final success = await widget.viewModel.createProductWithLot(newProduct, newLot);
@@ -238,6 +239,16 @@ class _AddProductLotSheetState extends State<AddProductLotSheet> {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                decoration: const InputDecoration(labelText: 'Precio Base Promotor (Bs - Opcional)'),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                validator: (val) {
+                  if (val != null && val.isNotEmpty && double.tryParse(val) == null) return 'Inválido';
+                  return null;
+                },
+                onSaved: (val) => _promoterBasePrice = (val != null && val.isNotEmpty) ? double.parse(val) : null,
               ),
               const SizedBox(height: 24),
 

@@ -43,9 +43,14 @@ dependencies:
   equatable: ^3.0.0
   provider: ^6.1.5+1
   intl: ^0.20.3
+  firebase_core: ^4.15.0
+  firebase_auth: ^6.7.0
+  cloud_firestore: ^6.10.0
 
 dev_dependencies:
   flutter_test:
+    sdk: flutter
+  integration_test:
     sdk: flutter
 
   # The "flutter_lints" package below contains a set of recommended lints to

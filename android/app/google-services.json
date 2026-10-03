@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "608580895885",
+    "project_id": "electronic-store-bo-2026-c748c",
+    "storage_bucket": "electronic-store-bo-2026-c748c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:608580895885:android:46066fd9fe4754ac7a4ec4",
+        "android_client_info": {
+          "package_name": "com.example.electronic_store"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBjUL-bks26czMO9L9N0bpcOW7RZ-7z12Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:608580895885:android:46066fd9fe4754ac7a4ec4",
+        "android_client_info": {
+          "package_name": "com.electronicstore.electronic_store"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBjUL-bks26czMO9L9N0bpcOW7RZ-7z12Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,4 +1,4 @@
-﻿import 'package:dartz/dartz.dart';
+import 'package:dartz/dartz.dart';
 import 'package:equatable/equatable.dart';
 import '../../../../core/errors/failures.dart';
 import '../../../../core/usecases/usecase.dart';
@@ -11,7 +11,7 @@ class CreateSale implements UseCase<Unit, CreateSaleParams> {
 
   @override
   Future<Either<Failure, Unit>> call(CreateSaleParams params) =>
-      repository.saveSale(params.sale);
+      repository.processSale(params.sale);
 }
 
 class CreateSaleParams extends Equatable {

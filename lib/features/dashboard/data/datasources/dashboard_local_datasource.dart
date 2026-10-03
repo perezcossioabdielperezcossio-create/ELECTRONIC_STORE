@@ -18,17 +18,17 @@ class DashboardLocalDatasourceImpl implements DashboardLocalDatasource {
     final result = await db.rawQuery('''
       SELECT 
         SUM(l.current_quantity * l.real_unit_cost) AS capital_inmovilizado,
-        SUM(l.current_quantity * (p.standard_selling_price - l.real_unit_cost)) AS ganancia_potencial
+        SUM(l.current_quantity * (COALESCE(p.standard_selling_price, l.real_unit_cost) - l.real_unit_cost)) AS ganancia_potencial
       FROM lots l
-      JOIN products p ON l.product_id = p.id
-      WHERE l.is_active = 1
+      LEFT JOIN products p ON (l.product_id = p.id OR l.product_id = p.sku)
+      WHERE (l.is_active = 1 OR l.is_active IS NULL) AND l.current_quantity > 0
     ''');
 
     if (result.isNotEmpty && result.first['capital_inmovilizado'] != null) {
       final row = result.first;
       return BalancePatrimonial(
         capitalInmovilizado: (row['capital_inmovilizado'] as num).toDouble(),
-        gananciaPotencial: (row['ganancia_potencial'] as num).toDouble(),
+        gananciaPotencial: ((row['ganancia_potencial'] as num?) ?? 0.0).toDouble(),
       );
     }
     return const BalancePatrimonial(capitalInmovilizado: 0, gananciaPotencial: 0);

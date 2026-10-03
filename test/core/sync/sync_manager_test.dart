@@ -22,6 +22,20 @@ class TestRemoteSyncDataSource implements RemoteSyncDataSource {
       return SyncResult(success: false, errorMessage: error ?? 'Simulated error');
     }
   }
+
+  @override
+  Stream<List<Map<String, dynamic>>> listenToRemoteProducts() => const Stream.empty();
+
+  @override
+  Stream<List<Map<String, dynamic>>> listenToRemoteLots() => const Stream.empty();
+
+  @override
+  Stream<List<Map<String, dynamic>>> listenToRemoteSales() => const Stream.empty();
+
+  @override
+  Stream<List<Map<String, dynamic>>> listenToRemoteInventoryChanges() {
+    return const Stream.empty();
+  }
 }
 
 class MockDatabaseHelper extends Mock implements DatabaseHelper {}
@@ -34,6 +48,7 @@ void main() {
   late MockDatabaseHelper mockDatabaseHelper;
 
   setUpAll(() {
+    TestWidgetsFlutterBinding.ensureInitialized();
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   });
@@ -116,11 +131,7 @@ void main() {
     expect(pending.length, 0);
 
     final results = await db.query('sync_queue', orderBy: 'created_at ASC');
-    expect(results.length, 2);
-    expect(results[0]['status'], 'SYNCED');
-    expect(results[0]['payload'], contains('"id":1'));
-    expect(results[1]['status'], 'SYNCED');
-    expect(results[1]['payload'], contains('"id":2'));
+    expect(results.length, 0); // They are deleted upon sync
   });
 
   test('Test 3: Verificar que un fallo de red transitorio aumente retry_count sin borrar el registro de la cola', () async {
@@ -145,5 +156,31 @@ void main() {
     final results = await db.query('sync_queue', where: 'id = ?', whereArgs: [op.id]);
     expect(results.first['status'], 'FAILED');
     expect(results.first['retry_count'], 1);
+  });
+
+  test('Test 4: Verificar que una operacion DELETE de productos se procesa exitosamente y se sincroniza al recuperar conexion', () async {
+    final op = SyncOperationModel(
+      id: const Uuid().v4(),
+      tableName: 'products',
+      operation: 'DELETE',
+      payload: jsonEncode({'sku': 'SKU-DELETE-1', 'id': 'prod-123'}),
+      createdAt: DateTime.now().toUtc().toIso8601String(),
+    );
+
+    await localDataSource.enqueue(op);
+
+    // Initial state: 1 pending deletion
+    var pending = await localDataSource.getPendingOperations();
+    expect(pending.length, 1);
+    expect(pending.first.operation, 'DELETE');
+    expect(pending.first.tableName, 'products');
+
+    remoteDataSource.shouldSucceed = true;
+
+    await syncManager.syncPendingOperations();
+
+    // After sync: queue is processed and cleaned
+    pending = await localDataSource.getPendingOperations();
+    expect(pending.length, 0);
   });
 }

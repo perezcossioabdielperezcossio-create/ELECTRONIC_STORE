@@ -85,12 +85,61 @@ class _PosSalesViewState extends State<PosSalesView> {
                           final product = viewModel.filteredProducts[index];
                           final bool isOutOfStock = product.availableStock <= 0;
                           
+                          final cartItemIdx = viewModel.cart.indexWhere((i) => i.productId == product.id);
+                          final cartQty = cartItemIdx >= 0 ? viewModel.cart[cartItemIdx].quantity : 0;
+
                           return ListTile(
                             title: Text(product.name),
                             subtitle: Text('SKU: ${product.sku} | Stock: ${product.availableStock}'),
-                            trailing: Text(
-                              'Bs. ${product.standardSellingPrice.toStringAsFixed(2)}',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Bs. ${product.standardSellingPrice.toStringAsFixed(2)}',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                ),
+                                const SizedBox(width: 16),
+                                if (cartQty > 0)
+                                  IconButton(
+                                    icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
+                                    onPressed: () {
+                                      if (cartQty > 1) {
+                                        viewModel.addItem(
+                                          SaleItem(
+                                            productId: product.id,
+                                            productName: product.name,
+                                            quantity: -1, // Reduce quantity
+                                            unitPrice: product.standardSellingPrice,
+                                          ),
+                                          product,
+                                        );
+                                      } else {
+                                        viewModel.removeItem(product.id);
+                                      }
+                                    },
+                                  ),
+                                if (cartQty > 0)
+                                  Text(
+                                    '$cartQty',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                  ),
+                                IconButton(
+                                  icon: const Icon(Icons.add_circle_outline, color: Colors.green),
+                                  onPressed: isOutOfStock
+                                      ? null
+                                      : () {
+                                          viewModel.addItem(
+                                            SaleItem(
+                                              productId: product.id,
+                                              productName: product.name,
+                                              quantity: 1, // Increase quantity
+                                              unitPrice: product.standardSellingPrice,
+                                            ),
+                                            product,
+                                          );
+                                        },
+                                ),
+                              ],
                             ),
                             leading: Container(
                               width: 12,
@@ -103,7 +152,6 @@ class _PosSalesViewState extends State<PosSalesView> {
                             onTap: isOutOfStock
                                 ? null
                                 : () {
-                                    // Añadir al carrito (1 unidad por defecto, sin descuento)
                                     viewModel.addItem(
                                       SaleItem(
                                         productId: product.id,
