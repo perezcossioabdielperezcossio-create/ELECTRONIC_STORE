@@ -104,13 +104,15 @@ void main() async {
             createProductWithLotUseCase: createProductWithLot,
             updateProductUseCase: updateProductUseCase,
             deleteProductUseCase: deleteProductUseCase,
-          ),
+            syncManager: syncManager,
+          )..loadProducts(),
         ),
         ChangeNotifierProvider(
           create: (_) => PosViewModel(
             createSale: createSale,
             getAllProducts: getAllProducts,
             voidSaleUseCase: voidSale,
+            syncManager: syncManager,
           )..loadProducts(), // Pre-load products on startup
         ),
         ChangeNotifierProvider(
@@ -118,7 +120,8 @@ void main() async {
             getFinancialOverview: getFinancialOverview,
             getDailyCashAudit: getDailyCashAudit,
             getSalesByDate: getSalesByDate,
-          ),
+            syncManager: syncManager,
+          )..loadDashboardData(),
         ),
         ChangeNotifierProvider(
           create: (_) => PromotersViewModel(

@@ -2,6 +2,8 @@ import 'package:sqflite/sqflite.dart';
 import '../../../../core/database/database_helper.dart';
 import '../models/sync_operation_model.dart';
 
+import '../../../../features/inventory/data/models/lot_model.dart';
+
 abstract class SyncLocalDataSource {
   Future<void> enqueue(SyncOperationModel operation);
   Future<List<SyncOperationModel>> getPendingOperations();
@@ -10,6 +12,8 @@ abstract class SyncLocalDataSource {
   Future<void> syncProducts(List<Map<String, dynamic>> products);
   Future<void> syncLots(List<Map<String, dynamic>> lots);
   Future<void> syncSales(List<Map<String, dynamic>> sales);
+  Future<void> insertOrUpdateLot(LotModel lot);
+  Future<void> deleteLot(String id);
 }
 
 class SyncLocalDataSourceImpl implements SyncLocalDataSource {
@@ -67,6 +71,33 @@ class SyncLocalDataSourceImpl implements SyncLocalDataSource {
   }
 
   @override
+  Future<void> insertOrUpdateLot(LotModel lot) async {
+    final db = await dbHelper.database;
+    final map = lot.toSqliteMap();
+    
+    // If product_id doesn't match an id in products, check if it matches a sku
+    final prod = await db.query('products', where: 'id = ?', whereArgs: [lot.productId], limit: 1);
+    if (prod.isEmpty) {
+      final prodBySku = await db.query('products', where: 'sku = ?', whereArgs: [lot.productId], limit: 1);
+      if (prodBySku.isNotEmpty) {
+        map['product_id'] = prodBySku.first['id'];
+      }
+    }
+    
+    await db.insert(
+      'lots',
+      map,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  @override
+  Future<void> deleteLot(String id) async {
+    final db = await dbHelper.database;
+    await db.delete('lots', where: 'id = ?', whereArgs: [id]);
+  }
+
+  @override
   Future<void> syncProducts(List<Map<String, dynamic>> products) async {
     final db = await dbHelper.database;
     await db.transaction((txn) async {
@@ -104,28 +135,21 @@ class SyncLocalDataSourceImpl implements SyncLocalDataSource {
     await db.transaction((txn) async {
       for (final rawLot in lots) {
         try {
-          final lotMap = Map<String, dynamic>.from(rawLot);
-          lotMap.remove('clientTimestamp');
-          lotMap.remove('lastModified');
-
-          final validCols = {
-            'id', 'product_id', 'purchase_date', 'initial_quantity', 
-            'current_quantity', 'real_unit_cost', 'promoter_base_price', 'is_active'
-          };
-          lotMap.removeWhere((k, v) => !validCols.contains(k));
-
-          if (lotMap.containsKey('id') && lotMap.containsKey('product_id')) {
+          final lotModel = LotModel.fromMap(rawLot);
+          if (lotModel.id.isNotEmpty) {
+            final map = lotModel.toSqliteMap();
+            // Validate product_id / sku
+            final prod = await txn.query('products', where: 'id = ?', whereArgs: [lotModel.productId], limit: 1);
+            if (prod.isEmpty) {
+              final prodBySku = await txn.query('products', where: 'sku = ?', whereArgs: [lotModel.productId], limit: 1);
+              if (prodBySku.isNotEmpty) {
+                map['product_id'] = prodBySku.first['id'];
+              }
+            }
             await txn.insert(
               'lots',
-              lotMap,
+              map,
               conflictAlgorithm: ConflictAlgorithm.replace,
-            );
-          } else if (lotMap.containsKey('id') && lotMap.containsKey('current_quantity')) {
-            await txn.update(
-              'lots',
-              {'current_quantity': lotMap['current_quantity']},
-              where: 'id = ?',
-              whereArgs: [lotMap['id']],
             );
           }
         } catch (_) {

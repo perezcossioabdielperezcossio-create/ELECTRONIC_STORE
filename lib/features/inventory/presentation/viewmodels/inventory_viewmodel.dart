@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../../domain/entities/lot.dart';
 import '../../domain/entities/product.dart';
@@ -8,17 +9,21 @@ import '../../domain/usecases/create_product_with_lot_usecase.dart';
 import '../../domain/usecases/update_product_usecase.dart';
 import '../../domain/usecases/delete_product_usecase.dart';
 import '../../../../core/usecases/usecase.dart';
+import '../../../../core/sync/domain/services/sync_manager.dart';
 
 enum ViewState { idle, loading, error }
 enum InventoryFilter { all, lowStock, outOfStock }
 
 class InventoryViewModel extends ChangeNotifier {
-  final GetAllProducts    getAllProductsUseCase;
+  final GetAllProducts getAllProductsUseCase;
   final AddLotUseCase addLotUseCase;
-  final ConsumeStockFifo  consumeStockUseCase;
+  final ConsumeStockFifo consumeStockUseCase;
   final CreateProductWithLotUseCase createProductWithLotUseCase;
   final UpdateProductUseCase updateProductUseCase;
   final DeleteProductUseCase deleteProductUseCase;
+  final SyncManager? syncManager;
+
+  StreamSubscription? _syncSubscription;
 
   InventoryViewModel({
     required this.getAllProductsUseCase,
@@ -27,18 +32,33 @@ class InventoryViewModel extends ChangeNotifier {
     required this.createProductWithLotUseCase,
     required this.updateProductUseCase,
     required this.deleteProductUseCase,
-  });
+    this.syncManager,
+  }) {
+    _initSyncListener();
+  }
 
-  ViewState           _state    = ViewState.idle;
-  List<Product>       _products = [];
-  String?             _errorMessage;
+  void _initSyncListener() {
+    _syncSubscription = syncManager?.onRemoteDataChanged.listen((_) {
+      loadProducts();
+    });
+  }
+
+  @override
+  void dispose() {
+    _syncSubscription?.cancel();
+    super.dispose();
+  }
+
+  ViewState _state = ViewState.idle;
+  List<Product> _products = [];
+  String? _errorMessage;
   
   String _searchQuery = '';
   InventoryFilter _filter = InventoryFilter.all;
 
-  ViewState     get state        => _state;
-  List<Product> get products     => List.unmodifiable(_products);
-  String?       get errorMessage => _errorMessage;
+  ViewState get state => _state;
+  List<Product> get products => List.unmodifiable(_products);
+  String? get errorMessage => _errorMessage;
   
   String get searchQuery => _searchQuery;
   InventoryFilter get filter => _filter;
@@ -92,11 +112,11 @@ class InventoryViewModel extends ChangeNotifier {
     final result = await getAllProductsUseCase(const NoParams());
     result.fold(
       (failure) {
-        _state        = ViewState.error;
+        _state = ViewState.error;
         _errorMessage = failure.message;
       },
       (products) {
-        _state    = ViewState.idle;
+        _state = ViewState.idle;
         _products = products;
       },
     );
@@ -107,6 +127,7 @@ class InventoryViewModel extends ChangeNotifier {
     final result = await addLotUseCase(AddLotParams(productId: productId, lot: lot));
     if (result.isRight()) {
       await loadProducts();
+      syncManager?.syncPendingOperations();
       return true;
     }
     return false;
@@ -122,6 +143,7 @@ class InventoryViewModel extends ChangeNotifier {
     try {
       await createProductWithLotUseCase(product: product, initialLot: lot);
       await loadProducts();
+      syncManager?.syncPendingOperations();
       return true;
     } catch (e) {
       _errorMessage = e.toString();
@@ -140,6 +162,7 @@ class InventoryViewModel extends ChangeNotifier {
       },
       (_) async {
         await loadProducts();
+        syncManager?.syncPendingOperations();
         return true;
       },
     );
@@ -155,6 +178,7 @@ class InventoryViewModel extends ChangeNotifier {
       },
       (_) async {
         await loadProducts();
+        syncManager?.syncPendingOperations();
         return true;
       },
     );

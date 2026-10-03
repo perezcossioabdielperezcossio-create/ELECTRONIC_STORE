@@ -37,7 +37,7 @@ class FirestoreRemoteDataSource implements RemoteSyncDataSource {
           await firestore.collection('lots').doc(lotId).set(payloadMap, SetOptions(merge: true));
         } else {
           final lot = LotModel.fromMap(payloadMap);
-          await pushLot(lot, operation.operation);
+          await pushLot(lot, operation.operation, payloadMap);
         }
       } else if (operation.tableName == 'sales' || operation.tableName == 'ventas') {
         if (operation.operation == 'DELETE') {
@@ -80,12 +80,29 @@ class FirestoreRemoteDataSource implements RemoteSyncDataSource {
     }
   }
 
-  Future<void> pushLot(LotModel lot, String operationType) async {
+  Future<void> pushLot(LotModel lot, String operationType, [Map<String, dynamic>? fullPayload]) async {
     final docRef = firestore.collection('lots').doc(lot.id);
     if (operationType == 'DELETE') {
       await docRef.delete();
     } else {
-      await docRef.set(lot.toMap(), SetOptions(merge: true));
+      final mapToSet = fullPayload != null ? Map<String, dynamic>.from(fullPayload) : lot.toMap();
+      mapToSet['id'] = lot.id;
+      mapToSet['product_id'] = lot.productId;
+      mapToSet['productSku'] = mapToSet['productSku'] ?? lot.productId;
+      mapToSet['costo_unitario_real'] = lot.realUnitCost;
+      mapToSet['real_unit_cost'] = lot.realUnitCost;
+      mapToSet['cantidad_actual'] = lot.currentQuantity;
+      mapToSet['current_quantity'] = lot.currentQuantity;
+      mapToSet['cantidad_inicial'] = lot.initialQuantity;
+      mapToSet['initial_quantity'] = lot.initialQuantity;
+      mapToSet['fecha_ingreso'] = lot.purchaseDate.toIso8601String();
+      mapToSet['purchase_date'] = lot.purchaseDate.toIso8601String();
+      if (lot.promoterBasePrice != null) {
+        mapToSet['promoter_base_price'] = lot.promoterBasePrice;
+        mapToSet['promoterBasePrice'] = lot.promoterBasePrice;
+      }
+      mapToSet['is_active'] = lot.isActive ? 1 : 0;
+      await docRef.set(mapToSet, SetOptions(merge: true));
     }
   }
 
@@ -103,7 +120,11 @@ class FirestoreRemoteDataSource implements RemoteSyncDataSource {
   @override
   Stream<List<Map<String, dynamic>>> listenToRemoteProducts() {
     return firestore.collection('products').snapshots().map((snapshot) {
-      return snapshot.docs.map((doc) => doc.data()).toList();
+      return snapshot.docs.map((doc) {
+        final data = Map<String, dynamic>.from(doc.data());
+        data['id'] ??= doc.id;
+        return data;
+      }).toList();
     });
   }
 
@@ -111,7 +132,11 @@ class FirestoreRemoteDataSource implements RemoteSyncDataSource {
   @override
   Stream<List<Map<String, dynamic>>> listenToRemoteLots() {
     return firestore.collection('lots').snapshots().map((snapshot) {
-      return snapshot.docs.map((doc) => doc.data()).toList();
+      return snapshot.docs.map((doc) {
+        final data = Map<String, dynamic>.from(doc.data());
+        data['id'] ??= doc.id;
+        return data;
+      }).toList();
     });
   }
 
@@ -119,7 +144,11 @@ class FirestoreRemoteDataSource implements RemoteSyncDataSource {
   @override
   Stream<List<Map<String, dynamic>>> listenToRemoteSales() {
     return firestore.collection('sales').snapshots().map((snapshot) {
-      return snapshot.docs.map((doc) => doc.data()).toList();
+      return snapshot.docs.map((doc) {
+        final data = Map<String, dynamic>.from(doc.data());
+        data['id'] ??= doc.id;
+        return data;
+      }).toList();
     });
   }
 

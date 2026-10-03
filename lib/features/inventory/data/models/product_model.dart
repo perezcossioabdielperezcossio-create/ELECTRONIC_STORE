@@ -15,13 +15,13 @@ class ProductModel extends Product {
 
   factory ProductModel.fromMap(Map<String, dynamic> map, {List<Lot>? lots}) {
     return ProductModel(
-      id: map['id'] as String,
-      sku: map['sku'] as String,
-      name: map['name'] as String,
-      brand: map['brand'] as String,
-      category: map['category'] as String,
-      standardSellingPrice: (map['standard_selling_price'] as num).toDouble(),
-      minStockThreshold: map['min_stock_threshold'] as int,
+      id: (map['id'] ?? '') as String,
+      sku: (map['sku'] ?? map['id'] ?? '') as String,
+      name: (map['name'] ?? map['nombre'] ?? '') as String,
+      brand: (map['brand'] ?? map['marca'] ?? '') as String,
+      category: (map['category'] ?? map['categoria'] ?? '') as String,
+      standardSellingPrice: ((map['standard_selling_price'] ?? map['standardSellingPrice'] ?? map['precio_venta'] ?? 0) as num).toDouble(),
+      minStockThreshold: ((map['min_stock_threshold'] ?? map['minStockThreshold'] ?? map['stock_minimo'] ?? 5) as num).toInt(),
       lots: lots ?? const [],
     );
   }

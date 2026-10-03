@@ -40,16 +40,34 @@ class InventoryLocalDataSourceImpl implements InventoryLocalDataSource {
         'retry_count': 0,
       });
 
+      final lotPayload = {
+        'id': initialLot.id,
+        'product_id': product.id,
+        'productSku': product.sku,
+        'productId': product.id,
+        'costo_unitario_real': initialLot.realUnitCost,
+        'real_unit_cost': initialLot.realUnitCost,
+        'cantidad_actual': initialLot.currentQuantity,
+        'current_quantity': initialLot.currentQuantity,
+        'cantidad_inicial': initialLot.initialQuantity,
+        'initial_quantity': initialLot.initialQuantity,
+        'fecha_ingreso': initialLot.purchaseDate.toIso8601String(),
+        'purchase_date': initialLot.purchaseDate.toIso8601String(),
+        if (initialLot.promoterBasePrice != null) 'promoter_base_price': initialLot.promoterBasePrice,
+        if (initialLot.promoterBasePrice != null) 'promoterBasePrice': initialLot.promoterBasePrice,
+        'is_active': initialLot.isActive ? 1 : 0,
+      };
+
       await txn.insert(
         'lots',
-        initialLot.toMap(),
+        initialLot.toSqliteMap(),
         conflictAlgorithm: ConflictAlgorithm.fail,
       );
       await txn.insert('sync_queue', {
         'id': const Uuid().v4(),
         'table_name': 'lots',
         'operation': 'CREATE',
-        'payload': jsonEncode(initialLot.toMap()),
+        'payload': jsonEncode(lotPayload),
         'created_at': DateTime.now().toUtc().toIso8601String(),
         'status': 'PENDING',
         'retry_count': 0,
@@ -60,16 +78,37 @@ class InventoryLocalDataSourceImpl implements InventoryLocalDataSource {
   @override
   Future<void> addLotToProduct(String productId, LotModel lot) async {
     await database.transaction((txn) async {
+      final prodQuery = await txn.query('products', where: 'id = ?', whereArgs: [productId], limit: 1);
+      final sku = prodQuery.isNotEmpty ? (prodQuery.first['sku'] as String) : productId;
+
+      final lotPayload = {
+        'id': lot.id,
+        'product_id': productId,
+        'productSku': sku,
+        'productId': productId,
+        'costo_unitario_real': lot.realUnitCost,
+        'real_unit_cost': lot.realUnitCost,
+        'cantidad_actual': lot.currentQuantity,
+        'current_quantity': lot.currentQuantity,
+        'cantidad_inicial': lot.initialQuantity,
+        'initial_quantity': lot.initialQuantity,
+        'fecha_ingreso': lot.purchaseDate.toIso8601String(),
+        'purchase_date': lot.purchaseDate.toIso8601String(),
+        if (lot.promoterBasePrice != null) 'promoter_base_price': lot.promoterBasePrice,
+        if (lot.promoterBasePrice != null) 'promoterBasePrice': lot.promoterBasePrice,
+        'is_active': lot.isActive ? 1 : 0,
+      };
+
       await txn.insert(
         'lots',
-        lot.toMap(),
+        lot.toSqliteMap(),
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
       await txn.insert('sync_queue', {
         'id': const Uuid().v4(),
         'table_name': 'lots',
         'operation': 'CREATE',
-        'payload': jsonEncode(lot.toMap()),
+        'payload': jsonEncode(lotPayload),
         'created_at': DateTime.now().toUtc().toIso8601String(),
         'status': 'PENDING',
         'retry_count': 0,
