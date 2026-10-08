@@ -10,17 +10,18 @@ class CartItemTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      title:    Text(item.productName),
-      subtitle: Text('${item.quantity} × RD\$ ${item.unitPrice}'),
+      title: Text(item.productName, style: const TextStyle(fontWeight: FontWeight.bold)),
+      subtitle: Text('${item.quantity} × Bs. ${item.unitPrice.toStringAsFixed(2)}'),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('RD\$ ${item.quantity * item.unitPrice}',
-              style: const TextStyle(fontWeight: FontWeight.bold)),
+          Text(
+            'Bs. ${item.lineTotal.toStringAsFixed(2)}',
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          ),
           IconButton(
-            icon: const Icon(Icons.delete_outline),
-            onPressed: () =>
-                context.read<PosViewModel>().removeItem(item.productId),
+            icon: const Icon(Icons.delete_outline, color: Colors.red),
+            onPressed: () => context.read<PosViewModel>().removeItem(item.productId),
           ),
         ],
       ),

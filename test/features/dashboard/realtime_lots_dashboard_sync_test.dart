@@ -39,6 +39,8 @@ class FakeRemoteSyncDataSource implements RemoteSyncDataSource {
   final StreamController<List<Map<String, dynamic>>> productsController = StreamController.broadcast();
   final StreamController<List<Map<String, dynamic>>> lotsController = StreamController.broadcast();
   final StreamController<List<Map<String, dynamic>>> salesController = StreamController.broadcast();
+  final StreamController<List<Map<String, dynamic>>> clientsController = StreamController.broadcast();
+  final StreamController<List<Map<String, dynamic>>> deliveriesController = StreamController.broadcast();
 
   final List<SyncOperationModel> pushedOperations = [];
 
@@ -58,12 +60,20 @@ class FakeRemoteSyncDataSource implements RemoteSyncDataSource {
   Stream<List<Map<String, dynamic>>> listenToRemoteSales() => salesController.stream;
 
   @override
+  Stream<List<Map<String, dynamic>>> listenToRemoteClients() => clientsController.stream;
+
+  @override
+  Stream<List<Map<String, dynamic>>> listenToRemoteDeliveries() => deliveriesController.stream;
+
+  @override
   Stream<List<Map<String, dynamic>>> listenToRemoteInventoryChanges() => productsController.stream;
 
   void dispose() {
     productsController.close();
     lotsController.close();
     salesController.close();
+    clientsController.close();
+    deliveriesController.close();
   }
 }
 

@@ -6,6 +6,9 @@ import '../models/sync_operation_model.dart';
 import '../../../../features/inventory/data/models/product_model.dart';
 import '../../../../features/inventory/data/models/lot_model.dart';
 import '../../../../features/pos/data/models/sale_model.dart';
+import '../../../../features/pos/data/models/sale_detail_model.dart';
+import '../../../../features/clients/data/models/client_model.dart';
+import '../../../../features/deliveries/data/models/delivery_model.dart';
 
 class FirestoreRemoteDataSource implements RemoteSyncDataSource {
   final FirebaseFirestore firestore;
@@ -20,7 +23,23 @@ class FirestoreRemoteDataSource implements RemoteSyncDataSource {
       payloadMap['clientTimestamp'] = operation.createdAt;
       payloadMap['lastModified'] = operation.createdAt; // Use creation time as last modification timestamp for sync
 
-      if (operation.tableName == 'products' || operation.tableName == 'productos') {
+      if (operation.tableName == 'clients' || operation.tableName == 'clientes' || operation.tableName == 'customers') {
+        if (operation.operation == 'DELETE') {
+          final clientId = (payloadMap['id'] as String?) ?? operation.id;
+          await deleteClient(clientId);
+        } else {
+          final client = ClientModel.fromMap(payloadMap);
+          await saveClient(client);
+        }
+      } else if (operation.tableName == 'deliveries' || operation.tableName == 'repartidores') {
+        if (operation.operation == 'DELETE') {
+          final deliveryId = (payloadMap['id'] as String?) ?? operation.id;
+          await deleteDelivery(deliveryId);
+        } else {
+          final delivery = DeliveryModel.fromMap(payloadMap);
+          await saveDelivery(delivery);
+        }
+      } else if (operation.tableName == 'products' || operation.tableName == 'productos') {
         if (operation.operation == 'DELETE') {
           final sku = (payloadMap['sku'] as String?) ?? (payloadMap['id'] as String);
           await deleteProduct(sku);
@@ -45,8 +64,22 @@ class FirestoreRemoteDataSource implements RemoteSyncDataSource {
           await firestore.collection('sales').doc(saleId).delete();
         } else {
           final sale = SaleModel.fromMap(payloadMap);
-          await pushSale(sale, operation.operation, payloadMap);
+          final rawDetails = payloadMap['sale_details'] ?? payloadMap['items'];
+          final details = <SaleDetailModel>[];
+          if (rawDetails is List) {
+            for (final d in rawDetails) {
+              if (d is Map) {
+                details.add(SaleDetailModel.fromMap(Map<String, dynamic>.from(d)));
+              }
+            }
+          }
+          await saveSaleTransaction(sale, details);
         }
+      } else if (operation.tableName == 'sale_items' || operation.tableName == 'detalle_ventas') {
+        // Individual item or detail
+        final detail = SaleDetailModel.fromMap(payloadMap);
+        final docRef = firestore.collection('sales').doc(detail.ventaId).collection('sale_details').doc(detail.id);
+        await docRef.set(detail.toMap(), SetOptions(merge: true));
       } else {
         return SyncResult(success: false, errorMessage: 'Unknown table: ${operation.tableName}');
       }
@@ -56,6 +89,42 @@ class FirestoreRemoteDataSource implements RemoteSyncDataSource {
       debugPrint('Firestore sync error: $e');
       return SyncResult(success: false, errorMessage: e.toString());
     }
+  }
+
+  /// Guarda un repartidor/delivery en la colección 'deliveries' usando delivery.id como Doc ID
+  Future<void> saveDelivery(DeliveryModel delivery) async {
+    final docRef = firestore.collection('deliveries').doc(delivery.id);
+    await docRef.set(delivery.toMap(), SetOptions(merge: true));
+  }
+
+  /// Elimina un repartidor de Firestore
+  Future<void> deleteDelivery(String deliveryId) async {
+    await firestore.collection('deliveries').doc(deliveryId).delete();
+  }
+
+  /// Guarda un cliente en la colección 'clients' usando client.id como Doc ID
+  Future<void> saveClient(ClientModel client) async {
+    final docRef = firestore.collection('clients').doc(client.id);
+    await docRef.set(client.toMap(), SetOptions(merge: true));
+  }
+
+  /// Elimina un cliente de Firestore
+  Future<void> deleteClient(String clientId) async {
+    await firestore.collection('clients').doc(clientId).delete();
+  }
+
+  /// Guarda una transacción de venta completa con cabecera y desglose detallado
+  Future<void> saveSaleTransaction(SaleModel sale, List<SaleDetailModel> details) async {
+    final docRef = firestore.collection('sales').doc(sale.id);
+    final saleMap = sale.toMap();
+    
+    if (details.isNotEmpty) {
+      final detailsMapList = details.map((d) => d.toMap()).toList();
+      saleMap['sale_details'] = detailsMapList;
+      saleMap['items'] = detailsMapList;
+    }
+    
+    await docRef.set(saleMap, SetOptions(merge: true));
   }
 
   Future<void> deleteProduct(String sku) async {
@@ -114,6 +183,30 @@ class FirestoreRemoteDataSource implements RemoteSyncDataSource {
       final mapToSet = fullPayload ?? sale.toMap();
       await docRef.set(mapToSet, SetOptions(merge: true));
     }
+  }
+
+  /// Listen to remote changes for Deliveries (Repartidores)
+  @override
+  Stream<List<Map<String, dynamic>>> listenToRemoteDeliveries() {
+    return firestore.collection('deliveries').snapshots().map((snapshot) {
+      return snapshot.docs.map((doc) {
+        final data = Map<String, dynamic>.from(doc.data());
+        data['id'] ??= doc.id;
+        return data;
+      }).toList();
+    });
+  }
+
+  /// Listen to remote changes for Clients (CRM)
+  @override
+  Stream<List<Map<String, dynamic>>> listenToRemoteClients() {
+    return firestore.collection('clients').snapshots().map((snapshot) {
+      return snapshot.docs.map((doc) {
+        final data = Map<String, dynamic>.from(doc.data());
+        data['id'] ??= doc.id;
+        return data;
+      }).toList();
+    });
   }
 
   /// Listen to remote changes for Products

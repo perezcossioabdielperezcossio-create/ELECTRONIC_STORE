@@ -1,4 +1,4 @@
-﻿/// Constantes globales de la aplicación.
+/// Constantes globales de la aplicación.
 class AppConstants {
   AppConstants._();
 
@@ -7,7 +7,7 @@ class AppConstants {
 
   // SQLite
   static const String dbName = 'electronic_store.db';
-  static const int dbVersion = 1;
+  static const int dbVersion = 2;
 
   // FIFO
   static const int lowStockThreshold = 5;

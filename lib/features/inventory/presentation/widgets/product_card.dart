@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 import '../../domain/entities/product.dart';
 import '../viewmodels/inventory_viewmodel.dart';
 import '../screens/edit_product_sheet.dart';
@@ -16,6 +17,9 @@ class ProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthViewModel?>();
+    final isAdmin = auth?.isAdmin ?? true;
+
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
       elevation: 2.0,
@@ -42,95 +46,96 @@ class ProductCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Icon(Icons.expand_more),
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert),
-              onSelected: (value) async {
-                final viewModel = context.read<InventoryViewModel>();
-                if (value == 'edit') {
-                  showModalBottomSheet(
-                    context: context,
-                    isScrollControlled: true,
-                    builder: (_) => EditProductSheet(
-                      viewModel: viewModel,
-                      product: product,
-                    ),
-                  );
-                } else if (value == 'add_lot') {
-                  showModalBottomSheet(
-                    context: context,
-                    isScrollControlled: true,
-                    builder: (_) => AddLotSheet(
-                      viewModel: viewModel,
-                      product: product,
-                    ),
-                  );
-                } else if (value == 'delete') {
-                  final confirm = await showDialog<bool>(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: const Text('Eliminar Producto'),
-                      content: const Text(
-                        '¿Deseas eliminar este producto y sus lotes de forma permanente?',
+            if (isAdmin)
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert),
+                onSelected: (value) async {
+                  final viewModel = context.read<InventoryViewModel>();
+                  if (value == 'edit') {
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      builder: (_) => EditProductSheet(
+                        viewModel: viewModel,
+                        product: product,
                       ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, false),
-                          child: const Text('Cancelar'),
+                    );
+                  } else if (value == 'add_lot') {
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      builder: (_) => AddLotSheet(
+                        viewModel: viewModel,
+                        product: product,
+                      ),
+                    );
+                  } else if (value == 'delete') {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Eliminar Producto'),
+                        content: const Text(
+                          '¿Deseas eliminar este producto y sus lotes de forma permanente?',
                         ),
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, true),
-                          style: TextButton.styleFrom(foregroundColor: Colors.red),
-                          child: const Text('Eliminar'),
-                        ),
-                      ],
-                    ),
-                  );
-                  if (confirm == true && context.mounted) {
-                    final success = await viewModel.deleteProduct(product.id);
-                    if (success && context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Producto y lotes eliminados con éxito.'),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('Cancelar'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            style: TextButton.styleFrom(foregroundColor: Colors.red),
+                            child: const Text('Eliminar'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm == true && context.mounted) {
+                      final success = await viewModel.deleteProduct(product.id);
+                      if (success && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Producto y lotes eliminados con éxito.'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      }
                     }
                   }
-                }
-              },
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 'edit',
-                  child: Row(
-                    children: [
-                      Icon(Icons.edit, size: 20),
-                      SizedBox(width: 8),
-                      Text('Editar Producto'),
-                    ],
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit, size: 20),
+                        SizedBox(width: 8),
+                        Text('Editar Producto'),
+                      ],
+                    ),
                   ),
-                ),
-                const PopupMenuItem(
-                  value: 'add_lot',
-                  child: Row(
-                    children: [
-                      Icon(Icons.add_box, size: 20, color: Colors.blue),
-                      SizedBox(width: 8),
-                      Text('Añadir Lote'),
-                    ],
+                  const PopupMenuItem(
+                    value: 'add_lot',
+                    child: Row(
+                      children: [
+                        Icon(Icons.add_box, size: 20, color: Colors.blue),
+                        SizedBox(width: 8),
+                        Text('Añadir Lote'),
+                      ],
+                    ),
                   ),
-                ),
-                const PopupMenuItem(
-                  value: 'delete',
-                  child: Row(
-                    children: [
-                      Icon(Icons.delete, size: 20, color: Colors.red),
-                      SizedBox(width: 8),
-                      Text('Eliminar', style: TextStyle(color: Colors.red)),
-                    ],
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete, size: 20, color: Colors.red),
+                        SizedBox(width: 8),
+                        Text('Eliminar', style: TextStyle(color: Colors.red)),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
           ],
         ),
         subtitle: Column(
@@ -170,10 +175,11 @@ class ProductCard extends StatelessWidget {
                     color: Colors.deepPurple,
                   ),
                 ),
-                Text(
-                  'Último Costo: ${product.latestCost != null ? 'Bs. ${product.latestCost!.toStringAsFixed(2)}' : 'N/A'}',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
+                if (isAdmin)
+                  Text(
+                    'Último Costo: ${product.latestCost != null ? 'Bs. ${product.latestCost!.toStringAsFixed(2)}' : 'N/A'}',
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
               ],
             ),
           ],
@@ -209,14 +215,18 @@ class ProductCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
               subtitle: Text(
-                'Disp: ${lot.currentQuantity}/${lot.initialQuantity} · Costo: Bs. ${lot.realUnitCost.toStringAsFixed(2)}',
+                isAdmin
+                    ? 'Disp: ${lot.currentQuantity}/${lot.initialQuantity} · Costo: Bs. ${lot.realUnitCost.toStringAsFixed(2)}'
+                    : 'Disponible: ${lot.currentQuantity} unid.',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              trailing: Text(
-                'Bs. ${lot.totalHoldingCapital.toStringAsFixed(2)}',
-                style: const TextStyle(fontWeight: FontWeight.w500),
-              ),
+              trailing: isAdmin
+                  ? Text(
+                      'Bs. ${lot.totalHoldingCapital.toStringAsFixed(2)}',
+                      style: const TextStyle(fontWeight: FontWeight.w500),
+                    )
+                  : null,
             );
           }),
           if (product.lots.where((lot) => lot.isActive).isEmpty)

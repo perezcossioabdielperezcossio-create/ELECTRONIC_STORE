@@ -64,6 +64,15 @@ class Product {
     return sortedLots.first.realUnitCost;
   }
 
+  /// The wholesale / promoter base price of active lots.
+  double? get promoterBasePrice {
+    final activeLotsWithPrice = lots.where((lot) => lot.isActive && lot.promoterBasePrice != null && lot.promoterBasePrice! > 0);
+    if (activeLotsWithPrice.isNotEmpty) {
+      return activeLotsWithPrice.first.promoterBasePrice;
+    }
+    return null;
+  }
+
   /// The total capital tied up in all active lots of this product.
   double get totalInvestedCapital {
     return lots
