@@ -18,6 +18,8 @@ class SyncManager extends ChangeNotifier {
   StreamSubscription<List<Map<String, dynamic>>>? _remoteProductsSubscription;
   StreamSubscription<List<Map<String, dynamic>>>? _remoteLotsSubscription;
   StreamSubscription<List<Map<String, dynamic>>>? _remoteSalesSubscription;
+  StreamSubscription<List<Map<String, dynamic>>>? _remoteClientsSubscription;
+  StreamSubscription<List<Map<String, dynamic>>>? _remoteDeliveriesSubscription;
   final StreamController<void> _remoteDataChangedController = StreamController<void>.broadcast();
   final StreamController<SyncCompletedEvent> _syncEventsController = StreamController<SyncCompletedEvent>.broadcast();
 
@@ -38,11 +40,13 @@ class SyncManager extends ChangeNotifier {
     _refreshPendingCount();
   }
 
-  /// Start real-time Firestore listeners for products, lots, and sales (Live 2-Device Sync)
+  /// Start real-time Firestore listeners for products, lots, sales, clients, and deliveries (Live 2-Device Sync)
   void startRealtimeSync() {
     _remoteProductsSubscription?.cancel();
     _remoteLotsSubscription?.cancel();
     _remoteSalesSubscription?.cancel();
+    _remoteClientsSubscription?.cancel();
+    _remoteDeliveriesSubscription?.cancel();
 
     _remoteProductsSubscription = remoteDataSource.listenToRemoteProducts().listen((products) async {
       await localDataSource.syncProducts(products);
@@ -62,6 +66,20 @@ class SyncManager extends ChangeNotifier {
       await localDataSource.syncSales(sales);
       _remoteDataChangedController.add(null);
       _syncEventsController.add(const SyncCompletedEvent('sales'));
+      notifyListeners();
+    });
+
+    _remoteClientsSubscription = remoteDataSource.listenToRemoteClients().listen((clients) async {
+      await localDataSource.syncClients(clients);
+      _remoteDataChangedController.add(null);
+      _syncEventsController.add(const SyncCompletedEvent('clients'));
+      notifyListeners();
+    });
+
+    _remoteDeliveriesSubscription = remoteDataSource.listenToRemoteDeliveries().listen((deliveries) async {
+      await localDataSource.syncDeliveries(deliveries);
+      _remoteDataChangedController.add(null);
+      _syncEventsController.add(const SyncCompletedEvent('deliveries'));
       notifyListeners();
     });
 
@@ -95,6 +113,8 @@ class SyncManager extends ChangeNotifier {
     _remoteProductsSubscription?.cancel();
     _remoteLotsSubscription?.cancel();
     _remoteSalesSubscription?.cancel();
+    _remoteClientsSubscription?.cancel();
+    _remoteDeliveriesSubscription?.cancel();
     _remoteDataChangedController.close();
     _syncEventsController.close();
     super.dispose();

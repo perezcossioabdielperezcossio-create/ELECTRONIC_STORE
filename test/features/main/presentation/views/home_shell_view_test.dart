@@ -4,6 +4,9 @@ import 'package:provider/provider.dart';
 import 'package:mocktail/mocktail.dart';
 
 import 'package:electronic_store/features/main/presentation/views/home_shell_view.dart';
+import 'package:electronic_store/features/auth/domain/entities/user.dart';
+import 'package:electronic_store/features/auth/data/models/user_model.dart';
+import 'package:electronic_store/features/auth/presentation/viewmodels/auth_viewmodel.dart';
 import 'package:electronic_store/features/inventory/presentation/viewmodels/inventory_viewmodel.dart';
 import 'package:electronic_store/features/pos/presentation/viewmodels/pos_viewmodel.dart';
 import 'package:electronic_store/features/dashboard/presentation/viewmodels/dashboard_viewmodel.dart';
@@ -15,6 +18,7 @@ class MockPosViewModel extends Mock with ChangeNotifier implements PosViewModel 
 class MockDashboardViewModel extends Mock with ChangeNotifier implements DashboardViewModel {}
 class MockPromotersViewModel extends Mock with ChangeNotifier implements PromotersViewModel {}
 class MockSyncManager extends Mock with ChangeNotifier implements SyncManager {}
+class MockAuthViewModel extends Mock with ChangeNotifier implements AuthViewModel {}
 
 void main() {
   late MockInventoryViewModel mockInventoryVM;
@@ -22,6 +26,7 @@ void main() {
   late MockDashboardViewModel mockDashboardVM;
   late MockPromotersViewModel mockPromotersVM;
   late MockSyncManager mockSyncManager;
+  late MockAuthViewModel mockAuthVM;
 
   setUp(() {
     mockInventoryVM = MockInventoryViewModel();
@@ -29,6 +34,12 @@ void main() {
     mockDashboardVM = MockDashboardViewModel();
     mockPromotersVM = MockPromotersViewModel();
     mockSyncManager = MockSyncManager();
+    mockAuthVM = MockAuthViewModel();
+
+    when(() => mockAuthVM.isAdmin).thenReturn(true);
+    when(() => mockAuthVM.isSeller).thenReturn(false);
+    when(() => mockAuthVM.currentUser).thenReturn(UserModel.masterAdmin1);
+    when(() => mockAuthVM.isAuthenticated).thenReturn(true);
 
     when(() => mockSyncManager.isOnline).thenReturn(true);
     when(() => mockSyncManager.pendingCount).thenReturn(0);
@@ -46,7 +57,13 @@ void main() {
     when(() => mockPosVM.error).thenReturn(null);
     when(() => mockPosVM.cart).thenReturn([]);
     when(() => mockPosVM.cartTotal).thenReturn(0.0);
+    when(() => mockPosVM.clients).thenReturn([]);
+    when(() => mockPosVM.selectedClient).thenReturn(null);
+    when(() => mockPosVM.deliveries).thenReturn([]);
+    when(() => mockPosVM.selectedDelivery).thenReturn(null);
     when(() => mockPosVM.loadProducts()).thenAnswer((_) async {});
+    when(() => mockPosVM.loadClients()).thenAnswer((_) async {});
+    when(() => mockPosVM.loadDeliveries()).thenAnswer((_) async {});
 
     when(() => mockDashboardVM.state).thenReturn(DashboardState.loaded);
     when(() => mockDashboardVM.overview).thenReturn(null);
@@ -61,28 +78,31 @@ void main() {
     when(() => mockPromotersVM.load()).thenAnswer((_) async {});
   });
 
-  testWidgets('HomeShellView displays 4 navigation tabs (Inventario, POS, Dashboard, Promotores)', (tester) async {
-    await tester.pumpWidget(
-      MultiProvider(
-        providers: [
-          ChangeNotifierProvider<SyncManager>.value(value: mockSyncManager),
-          ChangeNotifierProvider<InventoryViewModel>.value(value: mockInventoryVM),
-          ChangeNotifierProvider<PosViewModel>.value(value: mockPosVM),
-          ChangeNotifierProvider<DashboardViewModel>.value(value: mockDashboardVM),
-          ChangeNotifierProvider<PromotersViewModel>.value(value: mockPromotersVM),
-        ],
-        child: const MaterialApp(
-          home: HomeShellView(),
-        ),
+  Widget buildShellWithProviders() {
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider<AuthViewModel>.value(value: mockAuthVM),
+        ChangeNotifierProvider<SyncManager>.value(value: mockSyncManager),
+        ChangeNotifierProvider<InventoryViewModel>.value(value: mockInventoryVM),
+        ChangeNotifierProvider<PosViewModel>.value(value: mockPosVM),
+        ChangeNotifierProvider<DashboardViewModel>.value(value: mockDashboardVM),
+        ChangeNotifierProvider<PromotersViewModel>.value(value: mockPromotersVM),
+      ],
+      child: const MaterialApp(
+        home: HomeShellView(),
       ),
     );
+  }
 
+  testWidgets('HomeShellView displays 4 navigation tabs for Admin (Inventario, POS, Dashboard, Promotores)', (tester) async {
+    await tester.pumpWidget(buildShellWithProviders());
     await tester.pumpAndSettle();
 
     expect(find.text('Inventario'), findsOneWidget);
     expect(find.text('POS'), findsOneWidget);
     expect(find.text('Dashboard'), findsOneWidget);
     expect(find.text('Promotores'), findsOneWidget);
+    expect(find.byIcon(Icons.logout), findsOneWidget);
 
     // Tap on Inventario tab
     await tester.tap(find.text('Inventario'));
@@ -98,5 +118,27 @@ void main() {
     await tester.tap(find.text('Promotores'));
     await tester.pumpAndSettle();
     verify(() => mockPromotersVM.load()).called(greaterThanOrEqualTo(1));
+  });
+
+  testWidgets('HomeShellView displays 3 navigation tabs for Seller (Catálogo, POS, Dashboard)', (tester) async {
+    when(() => mockAuthVM.isAdmin).thenReturn(false);
+    when(() => mockAuthVM.isSeller).thenReturn(true);
+    when(() => mockAuthVM.currentUser).thenReturn(
+      const UserModel(
+        celular: '70012345',
+        nombre: 'Vendedor Store',
+        pin: '123456',
+        role: UserRole.seller,
+        tiendaNombre: 'Sucursal 1',
+      ),
+    );
+
+    await tester.pumpWidget(buildShellWithProviders());
+    await tester.pumpAndSettle();
+
+    expect(find.text('Catálogo'), findsOneWidget);
+    expect(find.text('POS'), findsOneWidget);
+    expect(find.text('Dashboard'), findsOneWidget);
+    expect(find.text('Promotores'), findsNothing);
   });
 }

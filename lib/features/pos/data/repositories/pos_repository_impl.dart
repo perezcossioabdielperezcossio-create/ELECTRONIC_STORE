@@ -13,35 +13,19 @@ class PosRepositoryImpl implements PosRepository {
   @override
   Future<Either<Failure, Unit>> saveSale(Sale sale) async {
     try {
-      await localDatasource.saveSale(SaleModel(
-        id:         sale.id,
-        items:      sale.items,
-        createdAt:  sale.createdAt,
-        discount:   sale.discount,
-        tax:        sale.tax,
-        status:     sale.status,
-        promoterId: sale.promoterId,
-        notes:      sale.notes,
-      ));
+      await localDatasource.saveSale(SaleModel.fromEntity(sale));
       return const Right(unit);
     } on DatabaseException catch (e) {
       return Left(DatabaseFailure(e.message));
+    } catch (e) {
+      return Left(DatabaseFailure(e.toString()));
     }
   }
 
   @override
   Future<Either<Failure, Unit>> processSale(Sale sale) async {
     try {
-      await localDatasource.processSale(SaleModel(
-        id:         sale.id,
-        items:      sale.items,
-        createdAt:  sale.createdAt,
-        discount:   sale.discount,
-        tax:        sale.tax,
-        status:     sale.status,
-        promoterId: sale.promoterId,
-        notes:      sale.notes,
-      ));
+      await localDatasource.processSale(SaleModel.fromEntity(sale));
       return const Right(unit);
     } on AntiLossException catch (e) {
       return Left(ValidationFailure(e.message));
@@ -49,6 +33,8 @@ class PosRepositoryImpl implements PosRepository {
       return Left(ValidationFailure(e.message));
     } on DatabaseException catch (e) {
       return Left(DatabaseFailure(e.message));
+    } catch (e) {
+      return Left(DatabaseFailure(e.toString()));
     }
   }
 
@@ -58,6 +44,8 @@ class PosRepositoryImpl implements PosRepository {
       return Right(await localDatasource.getSaleById(id));
     } on DatabaseException catch (e) {
       return Left(DatabaseFailure(e.message));
+    } catch (e) {
+      return Left(DatabaseFailure(e.toString()));
     }
   }
 
@@ -67,6 +55,8 @@ class PosRepositoryImpl implements PosRepository {
       return Right(await localDatasource.getSalesByDate(date));
     } on DatabaseException catch (e) {
       return Left(DatabaseFailure(e.message));
+    } catch (e) {
+      return Left(DatabaseFailure(e.toString()));
     }
   }
 
@@ -77,6 +67,8 @@ class PosRepositoryImpl implements PosRepository {
       return const Right(unit);
     } on DatabaseException catch (e) {
       return Left(DatabaseFailure(e.message));
+    } catch (e) {
+      return Left(DatabaseFailure(e.toString()));
     }
   }
 }
