@@ -7,6 +7,7 @@ class Lot {
   final int currentQuantity;
   final double realUnitCost;
   final double? promoterBasePrice;
+  final String location; // 'ALMACEN' or 'TIENDA'
 
   const Lot({
     required this.id,
@@ -16,6 +17,7 @@ class Lot {
     required this.currentQuantity,
     required this.realUnitCost,
     this.promoterBasePrice,
+    this.location = 'ALMACEN',
   })  : assert(initialQuantity >= 0, 'Initial quantity cannot be negative'),
         assert(currentQuantity >= 0, 'Current quantity cannot be negative'),
         assert(
@@ -34,6 +36,9 @@ class Lot {
   /// The total capital tied up in this specific lot.
   double get totalHoldingCapital => currentQuantity * realUnitCost;
 
+  bool get isTienda => location.toUpperCase() == 'TIENDA';
+  bool get isAlmacen => location.toUpperCase() != 'TIENDA';
+
   Lot copyWith({
     String? id,
     String? productId,
@@ -42,6 +47,7 @@ class Lot {
     int? currentQuantity,
     double? realUnitCost,
     double? promoterBasePrice,
+    String? location,
   }) {
     return Lot(
       id: id ?? this.id,
@@ -51,6 +57,7 @@ class Lot {
       currentQuantity: currentQuantity ?? this.currentQuantity,
       realUnitCost: realUnitCost ?? this.realUnitCost,
       promoterBasePrice: promoterBasePrice ?? this.promoterBasePrice,
+      location: location ?? this.location,
     );
   }
 }

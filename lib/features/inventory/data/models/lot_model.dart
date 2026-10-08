@@ -9,6 +9,7 @@ class LotModel extends Lot {
     required super.currentQuantity,
     required super.realUnitCost,
     super.promoterBasePrice,
+    super.location = 'ALMACEN',
   });
 
   factory LotModel.fromMap(Map<String, dynamic> map) {
@@ -30,6 +31,9 @@ class LotModel extends Lot {
     final basePriceVal = map['promoter_base_price'] ?? map['promoterBasePrice'] ?? map['precio_base_promotor'];
     final promoterBasePrice = basePriceVal != null ? (basePriceVal as num).toDouble() : null;
 
+    final locationRaw = (map['location'] ?? map['ubicacion'] ?? 'ALMACEN').toString().toUpperCase().trim();
+    final location = locationRaw.contains('TIENDA') ? 'TIENDA' : 'ALMACEN';
+
     return LotModel(
       id: id,
       productId: productId,
@@ -38,6 +42,7 @@ class LotModel extends Lot {
       currentQuantity: currentQty,
       realUnitCost: realCost,
       promoterBasePrice: promoterBasePrice,
+      location: location,
     );
   }
 
@@ -50,6 +55,7 @@ class LotModel extends Lot {
       'current_quantity': currentQuantity,
       'real_unit_cost': realUnitCost,
       'promoter_base_price': promoterBasePrice,
+      'location': location,
       'is_active': isActive ? 1 : 0,
     };
   }
@@ -69,6 +75,8 @@ class LotModel extends Lot {
       'real_unit_cost': realUnitCost,
       'costo_unitario_real': realUnitCost,
       'promoter_base_price': promoterBasePrice,
+      'location': location,
+      'ubicacion': location,
       'is_active': isActive ? 1 : 0,
     };
   }
@@ -82,6 +90,7 @@ class LotModel extends Lot {
       currentQuantity: lot.currentQuantity,
       realUnitCost: lot.realUnitCost,
       promoterBasePrice: lot.promoterBasePrice,
+      location: lot.location,
     );
   }
 }

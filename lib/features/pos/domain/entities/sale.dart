@@ -23,6 +23,7 @@ class Sale extends Equatable {
   final String? customerName;
   final String? customerPhone;
   final bool isLocked;
+  final String storeLocation; // 'TIENDA' or 'ALMACEN'
 
   const Sale({
     required this.id,
@@ -43,6 +44,7 @@ class Sale extends Equatable {
     this.customerName,
     this.customerPhone,
     this.isLocked = false,
+    this.storeLocation = 'ALMACEN',
   });
 
   // Spanish aliases for clean CRM / Ventas naming
@@ -52,6 +54,7 @@ class Sale extends Equatable {
   double get totalCobrado => total;
   String? get repartidorId => deliveryId;
   String? get repartidorNombre => deliveryName;
+  String get ubicacionOrigen => storeLocation;
 
   double get subtotal => items.isNotEmpty
       ? items.fold(0, (s, i) => s + i.lineTotal)
@@ -84,6 +87,7 @@ class Sale extends Equatable {
     String? customerName,
     String? customerPhone,
     bool? isLocked,
+    String? storeLocation,
   }) {
     return Sale(
       id: id ?? this.id,
@@ -104,6 +108,7 @@ class Sale extends Equatable {
       customerName: customerName ?? this.customerName,
       customerPhone: customerPhone ?? this.customerPhone,
       isLocked: isLocked ?? this.isLocked,
+      storeLocation: storeLocation ?? this.storeLocation,
     );
   }
 
@@ -127,5 +132,6 @@ class Sale extends Equatable {
         customerName,
         customerPhone,
         isLocked,
+        storeLocation,
       ];
 }

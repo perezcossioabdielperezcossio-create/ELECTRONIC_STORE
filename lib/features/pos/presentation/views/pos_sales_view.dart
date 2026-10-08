@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 import '../viewmodels/pos_viewmodel.dart';
 import '../widgets/checkout_bottom_sheet.dart';
 import '../../domain/entities/sale_item.dart';
@@ -21,9 +22,14 @@ class _PosSalesViewState extends State<PosSalesView> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<PosViewModel>().loadProducts();
-      context.read<PosViewModel>().loadClients();
-      context.read<PosViewModel>().loadDeliveries();
+      final auth = context.read<AuthViewModel?>();
+      final posVm = context.read<PosViewModel>();
+      if (auth != null && !auth.isAdmin) {
+        posVm.setStockLocation('TIENDA');
+      }
+      posVm.loadProducts();
+      posVm.loadClients();
+      posVm.loadDeliveries();
     });
   }
 
@@ -216,7 +222,8 @@ class _PosSalesViewState extends State<PosSalesView> {
                             separatorBuilder: (_, index) => const Divider(height: 1),
                             itemBuilder: (context, index) {
                               final product = viewModel.filteredProducts[index];
-                              final bool isOutOfStock = product.availableStock <= 0;
+                              final availableStock = viewModel.getAvailableStock(product);
+                              final bool isOutOfStock = availableStock <= 0;
                               
                               final cartItemIdx = viewModel.cart.indexWhere((i) => i.productId == product.id);
                               final cartQty = cartItemIdx >= 0 ? viewModel.cart[cartItemIdx].quantity : 0;
@@ -270,7 +277,7 @@ class _PosSalesViewState extends State<PosSalesView> {
                                                     borderRadius: BorderRadius.circular(6),
                                                   ),
                                                   child: Text(
-                                                    'Stock: ${product.availableStock}',
+                                                    'Stock (${viewModel.stockLocation}): $availableStock',
                                                     style: TextStyle(
                                                       fontSize: 11,
                                                       fontWeight: FontWeight.bold,

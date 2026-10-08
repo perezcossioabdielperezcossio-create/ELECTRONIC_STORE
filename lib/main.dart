@@ -63,6 +63,8 @@ import 'features/main/presentation/views/home_shell_view.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 
+import 'features/inventory/domain/usecases/delete_lot_usecase.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
@@ -129,6 +131,7 @@ void main() async {
   final createProductWithLot = CreateProductWithLotUseCase(invRepo);
   final updateProductUseCase = UpdateProductUseCase(invRepo);
   final deleteProductUseCase = DeleteProductUseCase(invRepo);
+  final deleteLotUseCase = DeleteLotUseCase(invRepo);
 
   // Dashboard
   final dashboardLocalDs = DashboardLocalDatasourceImpl(dbHelper);
@@ -162,6 +165,7 @@ void main() async {
             createProductWithLotUseCase: createProductWithLot,
             updateProductUseCase: updateProductUseCase,
             deleteProductUseCase: deleteProductUseCase,
+            deleteLotUseCase: deleteLotUseCase,
             syncManager: syncManager,
           )..loadProducts(),
         ),

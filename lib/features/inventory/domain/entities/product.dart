@@ -43,6 +43,20 @@ class Product {
         .fold(0, (sum, lot) => sum + lot.currentQuantity);
   }
 
+  /// The available stock physically located in the store (Tienda).
+  int get stockInTienda {
+    return lots
+        .where((lot) => lot.isActive && lot.location.toUpperCase() == 'TIENDA')
+        .fold(0, (sum, lot) => sum + lot.currentQuantity);
+  }
+
+  /// The available stock physically located in the central warehouse (Almacén).
+  int get stockInAlmacen {
+    return lots
+        .where((lot) => lot.isActive && lot.location.toUpperCase() != 'TIENDA')
+        .fold(0, (sum, lot) => sum + lot.currentQuantity);
+  }
+
   /// The current status of the product based on available stock and threshold.
   StockStatus get status {
     final stock = availableStock;

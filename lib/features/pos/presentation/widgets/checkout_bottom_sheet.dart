@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 import '../viewmodels/pos_viewmodel.dart';
 import '../../../clients/domain/entities/client.dart';
 import '../../../deliveries/domain/entities/delivery.dart';
@@ -300,7 +301,65 @@ class _CheckoutBottomSheetState extends State<CheckoutBottomSheet> {
                 ),
                 const SizedBox(height: 16),
 
-                // 3. Método de Pago
+                // 3. Ubicación de Origen del Stock (Solo configurable por Administrador)
+                Builder(
+                  builder: (context) {
+                    final auth = context.watch<AuthViewModel?>();
+                    final isAdmin = auth?.isAdmin ?? true;
+                    if (!isAdmin) {
+                      return Container(
+                        padding: const EdgeInsets.all(10),
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.teal.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.teal.shade200),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.storefront, color: Colors.teal, size: 20),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Descuento FIFO aplicado desde: TIENDA FÍSICA',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.teal),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Origen de Descuento de Stock (Admin)', style: TextStyle(fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        SegmentedButton<String>(
+                          segments: const [
+                            ButtonSegment(
+                              value: 'TIENDA',
+                              label: Text('Tienda Física'),
+                              icon: Icon(Icons.storefront),
+                            ),
+                            ButtonSegment(
+                              value: 'ALMACEN',
+                              label: Text('Almacén Central'),
+                              icon: Icon(Icons.warehouse),
+                            ),
+                          ],
+                          selected: {viewModel.stockLocation},
+                          onSelectionChanged: (Set<String> selection) {
+                            viewModel.setStockLocation(selection.first);
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                    );
+                  },
+                ),
+
+                // 4. Método de Pago
                 const Text('Método de Pago', style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 Wrap(

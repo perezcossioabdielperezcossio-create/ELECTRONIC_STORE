@@ -170,6 +170,8 @@ class FirestoreRemoteDataSource implements RemoteSyncDataSource {
         mapToSet['promoter_base_price'] = lot.promoterBasePrice;
         mapToSet['promoterBasePrice'] = lot.promoterBasePrice;
       }
+      mapToSet['location'] = lot.location;
+      mapToSet['ubicacion'] = lot.location;
       mapToSet['is_active'] = lot.isActive ? 1 : 0;
       await docRef.set(mapToSet, SetOptions(merge: true));
     }

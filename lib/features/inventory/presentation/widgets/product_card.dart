@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
+import '../../../auth/presentation/widgets/admin_approval_dialog.dart';
 import '../../domain/entities/product.dart';
 import '../viewmodels/inventory_viewmodel.dart';
 import '../screens/edit_product_sheet.dart';
@@ -15,10 +16,72 @@ class ProductCard extends StatelessWidget {
     required this.product,
   });
 
+  Future<void> _handleDeleteProduct(BuildContext context) async {
+    final viewModel = context.read<InventoryViewModel>();
+    
+    // Solicitar autorización obligatoria por PIN Admin
+    final pin = await showDialog<String>(
+      context: context,
+      builder: (_) => const AdminApprovalDialog(),
+    );
+
+    if (pin == null || !context.mounted) return;
+
+    final success = await viewModel.deleteProduct(product.id);
+    if (success && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Producto anulado/eliminado con éxito.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al eliminar producto: ${viewModel.errorMessage ?? 'Desconocido'}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _handleDeleteLot(BuildContext context, String lotId) async {
+    final viewModel = context.read<InventoryViewModel>();
+
+    // Solicitar autorización obligatoria por PIN Admin
+    final pin = await showDialog<String>(
+      context: context,
+      builder: (_) => const AdminApprovalDialog(),
+    );
+
+    if (pin == null || !context.mounted) return;
+
+    final success = await viewModel.deleteLot(lotId);
+    if (success && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Lote anulado/eliminado con éxito.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al anular lote: ${viewModel.errorMessage ?? 'Desconocido'}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthViewModel?>();
     final isAdmin = auth?.isAdmin ?? true;
+
+    final visibleLots = isAdmin 
+        ? product.lots.where((l) => l.isActive).toList()
+        : product.lots.where((l) => l.isActive && l.isTienda).toList();
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 8.0),
@@ -70,37 +133,7 @@ class ProductCard extends StatelessWidget {
                       ),
                     );
                   } else if (value == 'delete') {
-                    final confirm = await showDialog<bool>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: const Text('Eliminar Producto'),
-                        content: const Text(
-                          '¿Deseas eliminar este producto y sus lotes de forma permanente?',
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx, false),
-                            child: const Text('Cancelar'),
-                          ),
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx, true),
-                            style: TextButton.styleFrom(foregroundColor: Colors.red),
-                            child: const Text('Eliminar'),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (confirm == true && context.mounted) {
-                      final success = await viewModel.deleteProduct(product.id);
-                      if (success && context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Producto y lotes eliminados con éxito.'),
-                            backgroundColor: Colors.green,
-                          ),
-                        );
-                      }
-                    }
+                    await _handleDeleteProduct(context);
                   }
                 },
                 itemBuilder: (context) => [
@@ -130,7 +163,7 @@ class ProductCard extends StatelessWidget {
                       children: [
                         Icon(Icons.delete, size: 20, color: Colors.red),
                         SizedBox(width: 8),
-                        Text('Eliminar', style: TextStyle(color: Colors.red)),
+                        Text('Eliminar Producto', style: TextStyle(color: Colors.red)),
                       ],
                     ),
                   ),
@@ -148,6 +181,48 @@ class ProductCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 6.0),
+            if (!isAdmin) ...[
+              // Métricas específicas para vendedor
+              Wrap(
+                spacing: 8.0,
+                runSpacing: 4.0,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.teal.shade50,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.teal.shade200),
+                    ),
+                    child: Text(
+                      'Disponible en Tienda: ${product.stockInTienda}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.teal.shade800,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.indigo.shade50,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.indigo.shade200),
+                    ),
+                    child: Text(
+                      'En Almacén Central: ${product.stockInAlmacen}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.indigo.shade800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6.0),
+            ],
             Wrap(
               spacing: 8.0,
               runSpacing: 4.0,
@@ -191,50 +266,91 @@ class ProductCard extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Flexible(
+                Flexible(
                   child: Text(
-                    'Lotes Activos:',
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                    isAdmin ? 'Lotes Activos (Almacén y Tienda):' : 'Lotes en Tienda Física:',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 Text(
-                  '${product.lots.where((l) => l.isActive).length} lote(s)',
+                  '${visibleLots.length} lote(s)',
                   style: const TextStyle(fontSize: 12, color: Colors.grey),
                 ),
               ],
             ),
           ),
-          ...product.lots.where((lot) => lot.isActive).map((lot) {
+          ...visibleLots.map((lot) {
+            final isTienda = lot.isTienda;
             return ListTile(
               dense: true,
-              leading: const Icon(Icons.inventory_2, size: 20, color: Colors.blueGrey),
-              title: Text(
-                'Lote #${lot.id.substring(0, lot.id.length > 8 ? 8 : lot.id.length)} · ${_formatDate(lot.purchaseDate)}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              leading: Icon(
+                isTienda ? Icons.storefront : Icons.warehouse,
+                size: 20,
+                color: isTienda ? Colors.teal : Colors.indigo,
+              ),
+              title: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Lote #${lot.id.substring(0, lot.id.length > 8 ? 8 : lot.id.length)} · ${_formatDate(lot.purchaseDate)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: isTienda ? Colors.teal.shade50 : Colors.indigo.shade50,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                        color: isTienda ? Colors.teal.shade300 : Colors.indigo.shade300,
+                      ),
+                    ),
+                    child: Text(
+                      lot.location,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: isTienda ? Colors.teal.shade800 : Colors.indigo.shade800,
+                      ),
+                    ),
+                  ),
+                ],
               ),
               subtitle: Text(
                 isAdmin
                     ? 'Disp: ${lot.currentQuantity}/${lot.initialQuantity} · Costo: Bs. ${lot.realUnitCost.toStringAsFixed(2)}'
-                    : 'Disponible: ${lot.currentQuantity} unid.',
+                    : 'Disponible en Tienda: ${lot.currentQuantity} unid.',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
               trailing: isAdmin
-                  ? Text(
-                      'Bs. ${lot.totalHoldingCapital.toStringAsFixed(2)}',
-                      style: const TextStyle(fontWeight: FontWeight.w500),
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Bs. ${lot.totalHoldingCapital.toStringAsFixed(2)}',
+                          style: const TextStyle(fontWeight: FontWeight.w500),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                          tooltip: 'Anular Lote',
+                          onPressed: () => _handleDeleteLot(context, lot.id),
+                        ),
+                      ],
                     )
                   : null,
             );
           }),
-          if (product.lots.where((lot) => lot.isActive).isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(16.0),
+          if (visibleLots.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(16.0),
               child: Text(
-                'No hay lotes activos para este producto.',
-                style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
+                isAdmin 
+                    ? 'No hay lotes activos para este producto.'
+                    : 'No hay lotes disponibles en tienda física.',
+                style: const TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
               ),
             ),
         ],

@@ -47,12 +47,20 @@ class DatabaseHelper {
     } catch (_) {}
 
     await _createMissingTables(db);
+    await _ensureLotsLocationColumn(db);
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       await _createMissingTables(db);
     }
+    await _ensureLotsLocationColumn(db);
+  }
+
+  Future<void> _ensureLotsLocationColumn(DatabaseExecutor db) async {
+    try {
+      await db.execute("ALTER TABLE lots ADD COLUMN location TEXT NOT NULL DEFAULT 'ALMACEN';");
+    } catch (_) {}
   }
 
   Future<void> _createMissingTables(DatabaseExecutor db) async {

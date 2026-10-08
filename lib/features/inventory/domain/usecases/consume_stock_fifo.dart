@@ -11,14 +11,15 @@ class ConsumeStockFifo implements UseCase<List<Lot>, ConsumeStockParams> {
 
   @override
   Future<Either<Failure, List<Lot>>> call(ConsumeStockParams params) =>
-      repository.consumeStock(params.productId, params.quantity);
+      repository.consumeStock(params.productId, params.quantity, location: params.location);
 }
 
 class ConsumeStockParams extends Equatable {
   final String productId;
   final int quantity;
-  const ConsumeStockParams({required this.productId, required this.quantity});
+  final String? location;
+  const ConsumeStockParams({required this.productId, required this.quantity, this.location});
 
   @override
-  List<Object> get props => [productId, quantity];
+  List<Object?> get props => [productId, quantity, location];
 }

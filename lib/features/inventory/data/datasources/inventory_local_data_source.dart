@@ -13,7 +13,8 @@ abstract class InventoryLocalDataSource {
 
   Future<void> updateProduct(ProductModel product);
   Future<void> deleteProduct(String productId);
-  Future<List<LotModel>> consumeStock(String productId, int quantity);
+  Future<void> deleteLot(String lotId);
+  Future<List<LotModel>> consumeStock(String productId, int quantity, {String? location});
   Future<List<ProductModel>> getAllProducts();
 }
 
@@ -53,6 +54,8 @@ class InventoryLocalDataSourceImpl implements InventoryLocalDataSource {
         'initial_quantity': initialLot.initialQuantity,
         'fecha_ingreso': initialLot.purchaseDate.toIso8601String(),
         'purchase_date': initialLot.purchaseDate.toIso8601String(),
+        'location': initialLot.location,
+        'ubicacion': initialLot.location,
         if (initialLot.promoterBasePrice != null) 'promoter_base_price': initialLot.promoterBasePrice,
         if (initialLot.promoterBasePrice != null) 'promoterBasePrice': initialLot.promoterBasePrice,
         'is_active': initialLot.isActive ? 1 : 0,
@@ -94,6 +97,8 @@ class InventoryLocalDataSourceImpl implements InventoryLocalDataSource {
         'initial_quantity': lot.initialQuantity,
         'fecha_ingreso': lot.purchaseDate.toIso8601String(),
         'purchase_date': lot.purchaseDate.toIso8601String(),
+        'location': lot.location,
+        'ubicacion': lot.location,
         if (lot.promoterBasePrice != null) 'promoter_base_price': lot.promoterBasePrice,
         if (lot.promoterBasePrice != null) 'promoterBasePrice': lot.promoterBasePrice,
         'is_active': lot.isActive ? 1 : 0,
@@ -132,8 +137,9 @@ class InventoryLocalDataSourceImpl implements InventoryLocalDataSource {
 
     final lotsResult = await database.query(
       'lots',
-      where: 'product_id = ? AND current_quantity > 0',
+      where: 'product_id = ? AND current_quantity > 0 AND is_active = 1',
       whereArgs: [productId],
+      orderBy: 'purchase_date ASC',
     );
 
     final lots = lotsResult.map((lotMap) => LotModel.fromMap(lotMap)).toList();
@@ -143,7 +149,7 @@ class InventoryLocalDataSourceImpl implements InventoryLocalDataSource {
 
   @override
   Future<List<ProductModel>> getActiveInventory() async {
-    final productsResult = await database.query('products');
+    final productsResult = await database.query('products', where: 'is_active = 1');
     final List<ProductModel> inventory = [];
 
     for (final productMap in productsResult) {
@@ -151,8 +157,9 @@ class InventoryLocalDataSourceImpl implements InventoryLocalDataSource {
       
       final lotsResult = await database.query(
         'lots',
-        where: 'product_id = ? AND current_quantity > 0',
+        where: 'product_id = ? AND current_quantity > 0 AND is_active = 1',
         whereArgs: [productId],
+        orderBy: 'purchase_date ASC',
       );
       
       final lots = lotsResult.map((lotMap) => LotModel.fromMap(lotMap)).toList();
@@ -172,7 +179,7 @@ class InventoryLocalDataSourceImpl implements InventoryLocalDataSource {
       
       final lotsResult = await database.query(
         'lots',
-        where: 'product_id = ? AND current_quantity > 0',
+        where: 'product_id = ? AND current_quantity > 0 AND is_active = 1',
         whereArgs: [productId],
         orderBy: 'purchase_date ASC',
       );
@@ -211,40 +218,141 @@ class InventoryLocalDataSourceImpl implements InventoryLocalDataSource {
       final prodQuery = await txn.query('products', where: 'id = ?', whereArgs: [productId], limit: 1);
       final sku = prodQuery.isNotEmpty ? (prodQuery.first['sku'] as String) : productId;
 
-      // Borrado en cascada (producto + lotes) con encolado en sync_queue
-      final lots = await txn.query('lots', where: 'product_id = ?', whereArgs: [productId]);
-      for (final lot in lots) {
+      // Verificar si tiene ventas asociadas para borrado físico vs lógico
+      int salesCount = 0;
+      try {
+        final salesCountResult = await txn.rawQuery(
+          'SELECT COUNT(*) as count FROM detalle_ventas WHERE product_id = ?',
+          [productId],
+        );
+        salesCount = Sqflite.firstIntValue(salesCountResult) ?? 0;
+      } catch (_) {
+        salesCount = 0;
+      }
+
+      if (salesCount == 0) {
+        // Borrado físico si NO tiene ventas
+        final lots = await txn.query('lots', where: 'product_id = ?', whereArgs: [productId]);
+        for (final lot in lots) {
+          await txn.insert('sync_queue', {
+            'id': const Uuid().v4(),
+            'table_name': 'lots',
+            'operation': 'DELETE',
+            'payload': jsonEncode({'id': lot['id'], 'productSku': sku}),
+            'created_at': DateTime.now().toUtc().toIso8601String(),
+            'status': 'PENDING',
+            'retry_count': 0,
+          });
+        }
+        await txn.delete('lots', where: 'product_id = ?', whereArgs: [productId]);
+        await txn.delete('products', where: 'id = ?', whereArgs: [productId]);
+        
+        await txn.insert('sync_queue', {
+          'id': const Uuid().v4(),
+          'table_name': 'products',
+          'operation': 'DELETE',
+          'payload': jsonEncode({'id': productId, 'sku': sku}),
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+          'status': 'PENDING',
+          'retry_count': 0,
+        });
+      } else {
+        // Borrado lógico (is_active = 0) si TIENE ventas
+        await txn.update('products', {'is_active': 0}, where: 'id = ?', whereArgs: [productId]);
+        await txn.update('lots', {'is_active': 0, 'current_quantity': 0}, where: 'product_id = ?', whereArgs: [productId]);
+
+        await txn.insert('sync_queue', {
+          'id': const Uuid().v4(),
+          'table_name': 'products',
+          'operation': 'UPDATE',
+          'payload': jsonEncode({'id': productId, 'sku': sku, 'is_active': 0}),
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+          'status': 'PENDING',
+          'retry_count': 0,
+        });
+
+        final lots = await txn.query('lots', where: 'product_id = ?', whereArgs: [productId]);
+        for (final lot in lots) {
+          await txn.insert('sync_queue', {
+            'id': const Uuid().v4(),
+            'table_name': 'lots',
+            'operation': 'UPDATE',
+            'payload': jsonEncode({'id': lot['id'], 'is_active': 0, 'current_quantity': 0}),
+            'created_at': DateTime.now().toUtc().toIso8601String(),
+            'status': 'PENDING',
+            'retry_count': 0,
+          });
+        }
+      }
+    });
+  }
+
+  @override
+  Future<void> deleteLot(String lotId) async {
+    await database.transaction((txn) async {
+      final lotQuery = await txn.query('lots', where: 'id = ?', whereArgs: [lotId], limit: 1);
+      if (lotQuery.isEmpty) return;
+      final productId = lotQuery.first['product_id'] as String;
+      final prodQuery = await txn.query('products', where: 'id = ?', whereArgs: [productId], limit: 1);
+      final sku = prodQuery.isNotEmpty ? (prodQuery.first['sku'] as String) : productId;
+
+      int salesCount = 0;
+      try {
+        final salesCountResult = await txn.rawQuery(
+          'SELECT COUNT(*) as count FROM detalle_ventas WHERE lote_id = ?',
+          [lotId],
+        );
+        salesCount = Sqflite.firstIntValue(salesCountResult) ?? 0;
+      } catch (_) {
+        salesCount = 0;
+      }
+
+      if (salesCount == 0) {
+        // Borrado físico si no tiene ventas
+        await txn.delete('lots', where: 'id = ?', whereArgs: [lotId]);
         await txn.insert('sync_queue', {
           'id': const Uuid().v4(),
           'table_name': 'lots',
           'operation': 'DELETE',
-          'payload': jsonEncode({'id': lot['id'], 'productSku': sku}),
+          'payload': jsonEncode({'id': lotId, 'productSku': sku}),
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+          'status': 'PENDING',
+          'retry_count': 0,
+        });
+      } else {
+        // Borrado lógico si tiene ventas
+        await txn.update('lots', {'is_active': 0, 'current_quantity': 0}, where: 'id = ?', whereArgs: [lotId]);
+        await txn.insert('sync_queue', {
+          'id': const Uuid().v4(),
+          'table_name': 'lots',
+          'operation': 'UPDATE',
+          'payload': jsonEncode({'id': lotId, 'is_active': 0, 'current_quantity': 0}),
           'created_at': DateTime.now().toUtc().toIso8601String(),
           'status': 'PENDING',
           'retry_count': 0,
         });
       }
-      await txn.delete('lots', where: 'product_id = ?', whereArgs: [productId]);
-      await txn.delete('products', where: 'id = ?', whereArgs: [productId]);
-      
-      await txn.insert('sync_queue', {
-        'id': const Uuid().v4(),
-        'table_name': 'products',
-        'operation': 'DELETE',
-        'payload': jsonEncode({'id': productId, 'sku': sku}),
-        'created_at': DateTime.now().toUtc().toIso8601String(),
-        'status': 'PENDING',
-        'retry_count': 0,
-      });
     });
   }
 
   @override
-  Future<List<LotModel>> consumeStock(String productId, int quantity) async {
+  Future<List<LotModel>> consumeStock(String productId, int quantity, {String? location}) async {
+    String whereClause = "product_id = ? AND current_quantity > 0 AND is_active = 1";
+    final whereArgs = <dynamic>[productId];
+
+    if (location != null && location.isNotEmpty) {
+      final locUpper = location.toUpperCase().trim();
+      if (locUpper == 'TIENDA') {
+        whereClause += " AND UPPER(COALESCE(location, 'ALMACEN')) = 'TIENDA'";
+      } else if (locUpper == 'ALMACEN') {
+        whereClause += " AND UPPER(COALESCE(location, 'ALMACEN')) = 'ALMACEN'";
+      }
+    }
+
     final maps = await database.query(
       'lots',
-      where: 'product_id = ? AND current_quantity > 0',
-      whereArgs: [productId],
+      where: whereClause,
+      whereArgs: whereArgs,
       orderBy: 'purchase_date ASC',
     );
     final lots = maps.map((m) => LotModel.fromMap(m)).toList();
@@ -255,10 +363,11 @@ class InventoryLocalDataSourceImpl implements InventoryLocalDataSource {
       for (final lot in lots) {
         if (remaining <= 0) break;
         final take = lot.currentQuantity < remaining ? lot.currentQuantity : remaining;
+        final newQuantity = lot.currentQuantity - take;
         
         await txn.update(
           'lots',
-          {'current_quantity': lot.currentQuantity - take},
+          {'current_quantity': newQuantity},
           where: 'id = ?', whereArgs: [lot.id],
         );
         
@@ -266,7 +375,7 @@ class InventoryLocalDataSourceImpl implements InventoryLocalDataSource {
           'id': const Uuid().v4(),
           'table_name': 'lots',
           'operation': 'UPDATE',
-          'payload': jsonEncode({'id': lot.id, 'current_quantity': lot.currentQuantity - take}),
+          'payload': jsonEncode({'id': lot.id, 'current_quantity': newQuantity}),
           'created_at': DateTime.now().toUtc().toIso8601String(),
           'status': 'PENDING',
           'retry_count': 0,

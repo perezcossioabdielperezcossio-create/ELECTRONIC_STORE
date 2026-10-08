@@ -182,6 +182,7 @@ void main() {
                 current_quantity INTEGER NOT NULL,
                 real_unit_cost REAL NOT NULL,
                 promoter_base_price REAL,
+                location TEXT NOT NULL DEFAULT 'ALMACEN',
                 is_active INTEGER DEFAULT 1
             );
           ''');

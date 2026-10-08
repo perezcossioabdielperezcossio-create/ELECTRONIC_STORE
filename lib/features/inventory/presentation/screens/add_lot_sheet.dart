@@ -24,6 +24,7 @@ class _AddLotSheetState extends State<AddLotSheet> {
   int _quantity = 0;
   double _unitCost = 0.0;
   double? _promoterBasePrice;
+  String _location = 'ALMACEN';
 
   bool _isSaving = false;
 
@@ -44,6 +45,7 @@ class _AddLotSheetState extends State<AddLotSheet> {
         currentQuantity: _quantity,
         realUnitCost: _unitCost,
         promoterBasePrice: _promoterBasePrice,
+        location: _location,
       );
 
       final success = await widget.viewModel.addLot(widget.product.id, newLot);
@@ -127,6 +129,32 @@ class _AddLotSheetState extends State<AddLotSheet> {
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: _location,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Ubicación del Lote',
+                  prefixIcon: Icon(Icons.location_on_outlined),
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'ALMACEN',
+                    child: Text('Almacén Central (ALMACEN)'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'TIENDA',
+                    child: Text('Tienda Física / Mostrador (TIENDA)'),
+                  ),
+                ],
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() {
+                      _location = val;
+                    });
+                  }
+                },
               ),
               const SizedBox(height: 12),
               TextFormField(

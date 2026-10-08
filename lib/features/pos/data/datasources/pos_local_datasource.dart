@@ -55,10 +55,20 @@ class PosLocalDatasourceImpl implements PosLocalDatasource {
         final netUnitPrice = item.quantity > 0 ? (item.unitPrice - (item.lineDiscount / item.quantity)) : 0.0;
         double totalItemCost = 0.0;
 
+        String whereClause = 'product_id = ? AND current_quantity > 0 AND is_active = 1';
+        final whereArgs = <dynamic>[item.productId];
+
+        final locUpper = model.storeLocation.toUpperCase().trim();
+        if (locUpper == 'TIENDA') {
+          whereClause += " AND UPPER(COALESCE(location, 'ALMACEN')) = 'TIENDA'";
+        } else if (locUpper == 'ALMACEN') {
+          whereClause += " AND UPPER(COALESCE(location, 'ALMACEN')) = 'ALMACEN'";
+        }
+
         final lotsMaps = await txn.query(
           'lots',
-          where: 'product_id = ? AND current_quantity > 0',
-          whereArgs: [item.productId],
+          where: whereClause,
+          whereArgs: whereArgs,
           orderBy: 'purchase_date ASC',
         );
 

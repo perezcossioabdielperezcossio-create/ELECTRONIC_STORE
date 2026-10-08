@@ -140,10 +140,26 @@ class PosViewModel extends ChangeNotifier {
   final List<SaleItem> _cart = [];
   bool _isLoading = false;
   String? _error;
+  String _stockLocation = 'ALMACEN'; // Default for admin, sellers switch to 'TIENDA'
 
-  List<SaleItem> get cart      => List.unmodifiable(_cart);
-  bool           get isLoading => _isLoading;
-  String?        get error     => _error;
+  List<SaleItem> get cart          => List.unmodifiable(_cart);
+  bool           get isLoading     => _isLoading;
+  String?        get error         => _error;
+  String         get stockLocation => _stockLocation;
+
+  void setStockLocation(String location) {
+    _stockLocation = location.toUpperCase().trim().contains('ALMACEN') ? 'ALMACEN' : 'TIENDA';
+    notifyListeners();
+  }
+
+  int getAvailableStock(Product product) {
+    if (_stockLocation == 'TIENDA') {
+      return product.stockInTienda;
+    } else if (_stockLocation == 'ALMACEN') {
+      return product.stockInAlmacen;
+    }
+    return product.availableStock;
+  }
 
   double get cartSubtotal => _cart.fold(0.0, (sum, item) => sum + item.lineTotal);
 
@@ -380,8 +396,9 @@ class PosViewModel extends ChangeNotifier {
     }
 
     // Validar stock (RF-07)
-    if (newQuantity > product.availableStock) {
-      _error = 'Cantidad supera el stock disponible (${product.availableStock})';
+    final available = getAvailableStock(product);
+    if (newQuantity > available) {
+      _error = 'Cantidad supera el stock disponible en $_stockLocation ($available)';
       notifyListeners();
       return;
     }
@@ -448,8 +465,9 @@ class PosViewModel extends ChangeNotifier {
       removeItem(productId);
       return;
     }
-    if (newQuantity > product.availableStock) {
-      _error = 'Cantidad supera el stock disponible (${product.availableStock})';
+    final available = getAvailableStock(product);
+    if (newQuantity > available) {
+      _error = 'Cantidad supera el stock disponible en $_stockLocation ($available)';
       notifyListeners();
       return;
     }
@@ -479,7 +497,7 @@ class PosViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> checkout({String? promoterId}) async {
+  Future<bool> checkout({String? promoterId, String? storeLocation}) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -490,6 +508,8 @@ class PosViewModel extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+
+    final targetLocation = storeLocation ?? _stockLocation;
 
     final sale = Sale(
       id:             const Uuid().v4(),
@@ -505,6 +525,7 @@ class PosViewModel extends ChangeNotifier {
       customerName:   _selectedClient?.nombreAlias ?? _customerName,
       customerPhone:  _selectedClient?.telefonoWhatsapp ?? _customerPhone,
       discount:       _globalDiscount,
+      storeLocation:  targetLocation,
     );
 
     final result = await createSale(CreateSaleParams(sale));

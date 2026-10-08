@@ -1,5 +1,5 @@
 # ElectronicStore POS & Gestión de Inventarios
-### Memoria Técnica Oficial — v1.2.0 · POS Avanzado, CRM & Repartidores · Offline-First · Flutter + Firebase Firestore Real-Time
+### Memoria Técnica Oficial — v1.3.0 · Auth, Roles (RBAC), Seguridad, CRM, Deliveries & Migración SQLite · Offline-First · Flutter + Cloud Firestore Real-Time
 
 ---
 
@@ -8,42 +8,51 @@
 2. [Arquitectura del Sistema](#2-arquitectura-del-sistema)
 3. [Estructura de Directorios](#3-estructura-de-directorios)
 4. [Stack Tecnológico](#4-stack-tecnológico)
-5. [Esquema de Base de Datos](#5-esquema-de-base-de-datos)
+5. [Esquema de Base de Datos SQLite](#5-esquema-de-base-de-datos-sqlite)
 6. [Módulos Implementados](#6-módulos-implementados)
+   - [6.1 Módulo de Autenticación, Roles (RBAC) & Seguridad](#61-módulo-de-autenticación-roles-rbac--seguridad)
+   - [6.2 Módulo de Inventario (FIFO & Costeo por Lotes)](#62-módulo-de-inventario-fifo--costeo-por-lotes)
+   - [6.3 Módulo de Punto de Venta (POS Avanzado)](#63-módulo-de-punto-de-venta-pos-avanzado)
+   - [6.4 Módulo CRM de Clientes](#64-módulo-crm-de-clientes)
+   - [6.5 Módulo de Repartidores & Deliveries](#65-módulo-de-repartidores--deliveries)
+   - [6.6 Módulo de Promotores & Dropshipping](#66-módulo-de-promotores--dropshipping)
+   - [6.7 Módulo de Dashboard & Arqueo Diario](#67-módulo-de-dashboard--arqueo-diario)
 7. [Motor Offline-First y Sincronización en Tiempo Real](#7-motor-offline-first-y-sincronización-en-tiempo-real)
 8. [Matriz de Cumplimiento Funcional](#8-matriz-de-cumplimiento-funcional)
 9. [Requisitos No Funcionales](#9-requisitos-no-funcionales)
-10. [Pendientes y Deuda Técnica](#10-pendientes-y-deuda-técnica)
-11. [Guía de Ejecución](#11-guía-de-ejecución)
-12. [Historial de Cambios](#12-historial-de-cambios)
+10. [Seguridad & Credenciales de Fábrica](#10-seguridad--credenciales-de-fábrica)
+11. [Guía de Ejecución y Pruebas](#11-guía-de-ejecución-y-pruebas)
+12. [Historial de Versiones (Changelog)](#12-historial-de-versiones-changelog)
 
 ---
 
 ## 1. Resumen del Proyecto
 
-**ElectronicStore** es una solución integral de **Punto de Venta (POS)**, **Gestión de Inventarios**, **CRM de Clientes** y **Gestión de Entregas (Deliveries)** desarrollada en **Flutter**, diseñada para operar en entornos con conectividad inestable (**Offline-First**) y con soporte de sincronización reactiva bidireccional en tiempo real entre múltiples dispositivos conectados a **Cloud Firestore**.
+**ElectronicStore** es una plataforma integral de **Punto de Venta (POS)**, **Gestión de Inventarios Multilote (FIFO)**, **Control de Acceso Basado en Roles (RBAC)**, **CRM de Clientes** y **Gestión de Repartidores / Deliveries** desarrollada en **Flutter**.
 
-**Características principales:**
-- ✅ Costeo real por lotes con método **FIFO** (First-In, First-Out) y desglose transaccional por lote.
-- ✅ Valorizado en **Bolivianos (Bs.)**.
-- ✅ Sincronización bidireccional reactiva y en vivo con **Firebase Firestore** (`products`, `lots`, `sales`, `clients`, `deliveries`).
-- ✅ **Módulo CRM de Clientes:** Directorio de clientes con teléfono, WhatsApp y dirección predeterminada, autocompletado y alta rápida durante el checkout.
-- ✅ **Módulo de Repartidores & Delivery:** CRUD de repartidores, asignación en ventas con modalidad a domicilio, flete dinámico y sincronización en tiempo real.
-- ✅ **Flexibilidad Comercial en POS:** Búsqueda rápida por Nombre, SKU y Marca; controles rápidos `+/-`, modal de ajuste de cantidad y precios pactados (precio estándar vs. mayorista), edición de precio unitario en carrito y descuentos globales.
-- ✅ Control de acceso basado en roles (**RBAC**) para promotores y dropshipping con reservas automáticas (12h TTL).
-- ✅ Dashboard financiero con balance patrimonial en vivo, desglose de arqueo diario por método de pago e historial de ventas reactivo.
-- ✅ Soporte para ventas con devoluciones en ventana de 24h y restitución de stock al lote correspondiente.
-- ✅ Navegación unificada de 4 pestañas (Inventario, POS, Dashboard, Promotores) con refresco reactivo.
-- ✅ CRUD integral de productos y lotes con borrado atómico en cascada y registro en cola de sincronización.
+Diseñada específicamente bajo el paradigma **Offline-First**, garantiza operatividad total del 100% de sus funcionalidades comerciales aun en ausencia total de conexión a Internet, sincronizando bidireccionalmente los datos en tiempo real con **Cloud Firestore** al recuperar conectividad.
+
+### Capacidades Clave:
+- 🔐 **Autenticación y Seguridad RBAC:** Control estricto de roles (`Admin` vs. `Vendedor/Seller`), protección de costos reales de compra y aprobación de nuevos vendedores mediante PIN maestro de Administrador.
+- 📦 **Costeo Real FIFO Multilote:** Seguimiento de inventario por lotes independientes con fecha, costo unitario real de compra y trazabilidad transaccional exacta.
+- 🇧🇴 **Moneda Oficial:** Valorización nativa en **Bolivianos (Bs.)**.
+- 🔄 **Sincronización Bidireccional en Vivo:** Réplica en tiempo real multidispositivo conectada a Cloud Firestore (`products`, `lots`, `sales`, `clients`, `deliveries`, `users`).
+- 👥 **Módulo CRM de Clientes:** Directorio de clientes con autocompletado y alta rápida en ventana de cobro.
+- 🛵 **Módulo de Repartidores & Delivery:** Administración de repartidores, flete dinámico y asignación en ventas a domicilio.
+- 🛒 **POS Comercial de Alto Rendimiento:** Búsqueda multi-criterio (Nombre, SKU, Marca), controles rápidos `+/-`, precios pactados (Estándar vs. Mayorista), descuentos globales y regla anti-pérdida estricta.
+- 📊 **Dashboard Patrimonial y Arqueo:** Métricas de capital inmovilizado, utilidad neta real, desglose de arqueo de caja por método de pago (`EFECTIVO`, `QR`, `TRANSFERENCIA`, `TARJETA`) e historial de ventas reactivo.
+- ↩️ **Devoluciones Seguras (24h):** Ventana de anulación de ventas con restitución automática de stock al lote original.
 
 ---
 
 ## 2. Arquitectura del Sistema
 
+El proyecto implementa los principios de **Clean Architecture** combinados con una organización modular **Feature-First** y el patrón **MVVM (Model-View-ViewModel)** mediante `Provider`:
+
 ```
 ┌──────────────────────────────────────────────────────────┐
 │                    PRESENTATION LAYER                    │
-│           Views • ViewModels (ChangeNotifier)            │
+│     Views • ViewModels (ChangeNotifier) • UI Widgets     │
 ├──────────────────────────────────────────────────────────┤
 │                      DOMAIN LAYER                        │
 │         Entities • Use Cases • Repository Contracts      │
@@ -51,23 +60,22 @@
 │                       DATA LAYER                         │
 │      Models • DataSources (Local/Remote) • Repos Impl    │
 └──────────────────────────────────────────────────────────┘
-         ↕ SQLite (sqflite)      ↕ Firebase Firestore
+         ↕ SQLite (sqflite v2)    ↕ Cloud Firestore Real-Time
 ```
 
-**Patrones aplicados:**
+### Patrones de Diseño Implementados:
 
-| Patrón | Descripción |
-|--------|-------------|
-| **Clean Architecture** | Separación estricta en capas Domain / Data / Presentation |
-| **Feature-First** | Cada módulo es un directorio independiente dentro de `lib/features/` (`inventory`, `pos`, `clients`, `deliveries`, `promoters`, `dashboard`, `main`) |
-| **MVVM** | ViewModels con `ChangeNotifier` + Provider / `Consumer` en UI |
-| **Repository Pattern** | Contratos en Domain, implementaciones en Data |
-| **Functional Error Handling** | `dartz` `Either<Failure, T>` en toda la capa de dominio |
-| **Offline-First / SyncQueue** | Escrituras atómicas a `sync_queue` SQLite, procesadas por `SyncManager` hacia Firestore |
-| **Live Multi-Device Sync** | Escucha continua de Firestore snapshots (`products`, `lots`, `sales`, `clients`, `deliveries`) y refresco reactivo |
-| **FIFO Cascading Multi-Lot** | Consumo de stock cronológico desglosado en `detalle_ventas` (`sale_details`) con costo exacto por tramo |
-| **Anti-Loss Validation** | Bloqueo transaccional de ventas por debajo del costo real ponderado |
-| **Atomic Cascade Deletion** | Eliminación de entidades padre e hijos con propagación de eliminación a la nube |
+| Patrón | Implementación y Beneficio |
+|--------|----------------------------|
+| **Clean Architecture** | Aislamiento total de las reglas de negocio (Domain) de los frameworks y persistencia (Data/Presentation). |
+| **Feature-First** | Modularidad escalable por directorio en `lib/features/` (`auth`, `inventory`, `pos`, `clients`, `deliveries`, `promoters`, `dashboard`, `main`). |
+| **MVVM + Provider** | Separación reactiva de la interfaz de usuario con `ChangeNotifier` y consumo granular (`Consumer` / `context.watch`). |
+| **Repository Pattern** | Abstracción de orígenes de datos mediante contratos de interfaz y programación funcional con `dartz` (`Either<Failure, T>`). |
+| **Offline-First Transactional Engine** | Inserción ACID atómica local en SQLite acompañada de registro transaccional en `sync_queue`. |
+| **Live Snapshot Sync** | Escucha continua mediante `StreamSubscription` de colecciones Firestore con refresco automático de estado local. |
+| **FIFO Multi-Lot Allocation** | Descuento automático de inventario lote por lote desglosado en `detalle_ventas` (`sale_details`). |
+| **Strict Anti-Loss Shield** | Bloqueo en tiempo de ejecución de ventas cuyo total sea inferior al costo de adquisición ponderado. |
+| **Database Migration Handler** | Migración defensiva en `DatabaseHelper._onUpgrade` (v1 ➔ v2) asegurando tablas sin pérdida de datos. |
 
 ---
 
@@ -75,73 +83,97 @@
 
 ```
 lib/
-├── main.dart                          # Entry point. Inyección de dependencias + MultiProvider (Firestore Real)
-├── firebase_options.dart              # Configuración de Firebase por plataforma
+├── main.dart                          # Entry point, Inyección de Dependencias, Providers & MainAuthGate
+├── firebase_options.dart              # Credenciales y configuración multi-plataforma de Firebase
 │
 ├── core/
 │   ├── constants/
-│   │   ├── app_constants.dart         # Nombre/versión de la DB, rutas
-│   │   └── route_constants.dart       # Constantes de rutas nombradas
+│   │   ├── app_constants.dart         # Constantes de app, umbrales FIFO y versión de SQLite (v2)
+│   │   └── route_constants.dart       # Nombres de rutas de navegación
 │   ├── database/
-│   │   └── database_helper.dart       # Singleton SQLite con FK habilitadas
+│   │   └── database_helper.dart       # Singleton SQLite, PRAGMA foreign_keys, _onCreate y _onUpgrade (v2)
 │   ├── errors/
-│   │   ├── exceptions.dart            # Excepciones de la capa de datos
-│   │   └── failures.dart              # Failures de la capa de dominio
+│   │   ├── exceptions.dart            # Excepciones de bajo nivel
+│   │   └── failures.dart              # Clases Failure para programación funcional (Either)
 │   ├── sync/
 │   │   ├── data/
 │   │   │   ├── datasources/
-│   │   │   │   ├── sync_local_datasource.dart        # CRUD de sync_queue en SQLite + sync de tablas
-│   │   │   │   ├── remote_sync_datasource.dart       # Interfaz + MockRemote
-│   │   │   │   └── firestore_remote_data_source.dart # Impl real con Firestore (INSERT/UPDATE/DELETE en cascada)
+│   │   │   │   ├── sync_local_datasource.dart        # Gestión de sync_queue en SQLite y sync de entidades
+│   │   │   │   ├── remote_sync_datasource.dart       # Contrato de sincronización remota
+│   │   │   │   └── firestore_remote_data_source.dart # Integración real con Cloud Firestore (CRUD en cascada)
 │   │   │   └── models/
-│   │   │       └── sync_operation_model.dart         # Modelo de operación pendiente
+│   │   │       └── sync_operation_model.dart         # DTO de operaciones encoladas
 │   │   └── domain/
 │   │       └── services/
-│   │           └── sync_manager.dart  # Motor Offline y sincronización en tiempo real (ChangeNotifier)
+│   │           └── sync_manager.dart  # Motor orquestador Offline/Online y sincronizador en tiempo real
 │   ├── theme/
-│   │   └── app_theme.dart             # Tema Material 3 de la app
+│   │   └── app_theme.dart             # Definición del Design System (Material 3)
 │   ├── usecases/
-│   │   └── usecase.dart               # Clase base UseCase + NoParams
+│   │   └── usecase.dart               # Interfaz genérica UseCase<Type, Params>
 │   └── utils/
-│       ├── currency_formatter.dart    # Formateador de moneda en Bs.
-│       └── date_formatter.dart        # Formateador de fechas ISO-8601
+│       ├── currency_formatter.dart    # Formateo de moneda en Bolivianos (Bs.)
+│       └── date_formatter.dart        # Formateo estandarizado de fechas ISO-8601
 │
 ├── features/
+│   ├── auth/                          # 🔐 MÓDULO DE AUTENTICACIÓN Y ROLES (RBAC)
+│   │   ├── data/
+│   │   │   ├── datasources/
+│   │   │   │   ├── auth_local_datasource.dart        # Persistencia SQLite (users/usuarios) + Master Admins
+│   │   │   │   └── auth_remote_datasource.dart       # Sincronización y registro en Firestore (users)
+│   │   │   ├── models/user_model.dart                # DTO con serialización SQLite/Firestore y Master Admins
+│   │   │   └── repositories/auth_repository_impl.dart# Lógica de login offline-first, sesión y registro
+│   │   ├── domain/
+│   │   │   ├── entities/user.dart                    # Entidad User, UserRole (admin/seller) y credenciales
+│   │   │   ├── repositories/auth_repository.dart     # Contrato de repositorio de autenticación
+│   │   │   └── usecases/
+│   │   │       ├── get_current_session_usecase.dart  # Carga de sesión persistida
+│   │   │       ├── login_usecase.dart                # Validación por Celular + PIN
+│   │   │       ├── logout_usecase.dart               # Cierre seguro de sesión
+│   │   │       ├── register_seller_usecase.dart      # Alta con validación de PIN de Admin
+│   │   │       └── seed_master_admins_usecase.dart   # Siembra de cuentas maestras
+│   │   └── presentation/
+│   │       ├── viewmodels/auth_viewmodel.dart        # Estado de sesión, control RBAC y errores
+│   │       ├── views/
+│   │       │   ├── login_view.dart                   # Vista de acceso (Celular + PIN numérico)
+│   │       │   └── register_seller_view.dart         # Formulario de alta de nuevo vendedor
+│   │       └── widgets/
+│   │           └── admin_approval_dialog.dart        # Diálogo de seguridad para PIN de Administrador
+│   │
 │   ├── main/
 │   │   └── presentation/views/
-│   │       └── home_shell_view.dart   # Shell con BottomNav de 4 tabs (Inv, POS, Dash, Prom) + Sync Indicator
+│   │       └── home_shell_view.dart   # Shell con navegación dinámica RBAC (4 tabs Admin / 3 tabs Seller)
 │   │
-│   ├── clients/
+│   ├── clients/                       # 👥 MÓDULO CRM DE CLIENTES
 │   │   ├── data/
-│   │   │   ├── datasources/client_local_datasource.dart  # Operaciones SQLite + sync_queue en 'clients'
+│   │   │   ├── datasources/client_local_datasource.dart  # CRUD en tabla clientes + cola de sync
 │   │   │   ├── models/client_model.dart
 │   │   │   └── repositories/client_repository_impl.dart
 │   │   └── domain/
 │   │       ├── entities/client.dart
 │   │       ├── repositories/client_repository.dart
 │   │       └── usecases/
-│   │           ├── get_clients_usecase.dart              # Listado y búsqueda de clientes
-│   │           └── save_client_usecase.dart              # Guardado local + cola de sincronización
+│   │           ├── get_clients_usecase.dart
+│   │           └── save_client_usecase.dart
 │   │
-│   ├── deliveries/
+│   ├── deliveries/                    # 🛵 MÓDULO DE REPARTIDORES & DELIVERIES
 │   │   ├── data/
-│   │   │   ├── datasources/delivery_local_datasource.dart # CRUD SQLite + sync_queue en 'deliveries'
+│   │   │   ├── datasources/delivery_local_datasource.dart # CRUD en tabla deliveries + cola de sync
 │   │   │   ├── models/delivery_model.dart
 │   │   │   └── repositories/delivery_repository_impl.dart
 │   │   ├── domain/
 │   │   │   ├── entities/delivery.dart
 │   │   │   ├── repositories/delivery_repository.dart
 │   │   │   └── usecases/
-│   │   │       ├── delete_delivery_usecase.dart          # Baja de repartidor + sync DELETE
-│   │   │       ├── get_deliveries_usecase.dart           # Obtención de repartidores activos
-│   │   │       └── save_delivery_usecase.dart            # Alta / Edición de repartidor
+│   │   │       ├── delete_delivery_usecase.dart
+│   │   │       ├── get_deliveries_usecase.dart
+│   │   │       └── save_delivery_usecase.dart
 │   │   └── presentation/
 │   │       └── widgets/
-│   │           └── delivery_management_dialog.dart       # Modal interactivo de administración de repartidores
+│   │           └── delivery_management_dialog.dart   # Modal de gestión integral de repartidores
 │   │
-│   ├── inventory/
+│   ├── inventory/                     # 📦 MÓDULO DE INVENTARIO Y LOTES FIFO
 │   │   ├── data/
-│   │   │   ├── datasources/inventory_local_data_source.dart # Operaciones SQLite + registro sync_queue
+│   │   │   ├── datasources/inventory_local_data_source.dart
 │   │   │   ├── models/lot_model.dart
 │   │   │   ├── models/product_model.dart
 │   │   │   └── repositories/inventory_repository_impl.dart
@@ -153,30 +185,30 @@ lib/
 │   │   │       ├── add_inventory_batch.dart
 │   │   │       ├── consume_stock_fifo.dart
 │   │   │       ├── create_product_with_lot_usecase.dart
-│   │   │       ├── delete_product_usecase.dart         # Eliminación atómica en cascada
+│   │   │       ├── delete_product_usecase.dart
 │   │   │       ├── get_all_products.dart
-│   │   │       └── update_product_usecase.dart         # Actualización de metadata
+│   │   │       └── update_product_usecase.dart
 │   │   └── presentation/
 │   │       ├── screens/
-│   │       │   ├── add_lot_sheet.dart                  # Registro de nuevo lote
-│   │       │   ├── add_product_lot_sheet.dart          # Alta de producto + lote inicial
-│   │       │   ├── edit_product_sheet.dart             # Edición de producto
-│   │       │   └── inventory_catalog_screen.dart       # Catálogo con buscador y filtros
-│   │       ├── viewmodels/inventory_viewmodel.dart     # Estado reactivo del inventario
+│   │       │   ├── add_lot_sheet.dart
+│   │       │   ├── add_product_lot_sheet.dart
+│   │       │   ├── edit_product_sheet.dart
+│   │       │   └── inventory_catalog_screen.dart   # Catálogo adaptable con protección de costos según rol
+│   │       ├── viewmodels/inventory_viewmodel.dart
 │   │       ├── views/inventory_list_view.dart
 │   │       └── widgets/
-│   │           ├── product_card.dart                   # Tarjeta con acordeón de lotes y acciones (edit/delete)
+│   │           ├── product_card.dart               # Tarjeta con acordeón de lotes y controles Admin
 │   │           └── stock_status_badge.dart
 │   │
-│   ├── pos/
+│   ├── pos/                           # 🛒 MÓDULO DE PUNTO DE VENTA (POS)
 │   │   ├── data/
-│   │   │   ├── datasources/pos_local_datasource.dart   # FIFO multi-lote, anti-pérdida, voidSale, sync_queue con desglose
-│   │   │   ├── models/sale_detail_model.dart           # Modelo para detalle_ventas / sale_details
+│   │   │   ├── datasources/pos_local_datasource.dart # FIFO transaccional, regla anti-pérdida y voidSale
+│   │   │   ├── models/sale_detail_model.dart
 │   │   │   ├── models/sale_model.dart
 │   │   │   └── repositories/pos_repository_impl.dart
 │   │   ├── domain/
 │   │   │   ├── entities/sale.dart
-│   │   │   ├── entities/sale_detail.dart               # Entidad para desglose de costo y lote consumido
+│   │   │   ├── entities/sale_detail.dart           # Desglose de lote, costo y precio cobrado
 │   │   │   ├── entities/sale_item.dart
 │   │   │   ├── repositories/pos_repository.dart
 │   │   │   └── usecases/
@@ -185,17 +217,16 @@ lib/
 │   │   │       ├── process_sale_usecase.dart
 │   │   │       └── void_sale_usecase.dart
 │   │   └── presentation/
-│   │       ├── viewmodels/pos_viewmodel.dart           # Carrito, CRM, Deliveries, precios custom y anti-pérdida
+│   │       ├── viewmodels/pos_viewmodel.dart       # Carrito, CRM, Deliveries, precios custom y anti-pérdida
 │   │       ├── views/
-│   │       │   ├── pos_view.dart
-│   │       │   ├── pos_sales_view.dart                 # POS con buscador (Nombre/SKU/Marca) y controles inline
-│   │       │   └── pos_screen.dart                     # Alias de PosSalesView
+│   │       │   ├── pos_sales_view.dart             # POS con buscador multi-campo y controles rápidos
+│   │       │   └── pos_screen.dart
 │   │       └── widgets/
 │   │           ├── cart_item_tile.dart
-│   │           ├── checkout_bottom_sheet.dart          # Modal avanzado de cobro (CRM, Repartidor, Métodos, Descuentos)
-│   │           └── void_sale_dialog.dart
+│   │           ├── checkout_bottom_sheet.dart      # Modal de cobro (Cliente, Delivery, Pago, Descuento)
+│   │           └── void_sale_dialog.dart           # Diálogo de anulación en ventana de 24h
 │   │
-│   ├── promoters/
+│   ├── promoters/                     # 🤝 MÓDULO DE PROMOTORES & DROPSHIPPING
 │   │   ├── data/
 │   │   │   ├── datasources/promoter_local_datasource.dart
 │   │   │   ├── models/promoter_model.dart
@@ -209,10 +240,10 @@ lib/
 │   │   │       └── get_all_promoters.dart
 │   │   └── presentation/
 │   │       ├── viewmodels/promoters_viewmodel.dart
-│   │       ├── views/promoters_view.dart               # Vista de promotores integrada en HomeShellView
+│   │       ├── views/promoters_view.dart
 │   │       └── widgets/promoter_tile.dart
 │   │
-│   └── dashboard/
+│   └── dashboard/                     # 📊 MÓDULO DE DASHBOARD & ARQUEO FINANCIERO
 │       ├── data/
 │       │   ├── datasources/dashboard_local_datasource.dart
 │       │   ├── models/dashboard_summary_model.dart
@@ -225,48 +256,53 @@ lib/
 │       │       ├── get_daily_cash_audit_usecase.dart
 │       │       └── get_financial_overview_usecase.dart
 │       └── presentation/
-│           ├── viewmodels/dashboard_viewmodel.dart     # Métricas patrimoniales e historial de ventas reactivo
+│           ├── viewmodels/dashboard_viewmodel.dart
 │           ├── views/
-│           │   ├── dashboard_overview_view.dart        # Vista Dashboard con KPI cards e Historial de Ventas
-│           │   └── dashboard_screen.dart               # Alias de DashboardOverviewView
+│           │   ├── dashboard_overview_view.dart    # KPIs patrimoniales, arqueo y listado de ventas
+│           │   └── dashboard_screen.dart
 │           └── widgets/summary_card.dart
 │
-assets/
-└── sql/
-    └── schema.sql                                      # DDL completo de la base de datos SQLite
+└── assets/
+    └── sql/
+        └── schema.sql                         # DDL con esquema completo SQLite v2
 ```
 
 ---
 
 ## 4. Stack Tecnológico
 
-| Tecnología | Versión | Uso |
-|------------|---------|-----|
-| **Flutter** | SDK >= 3.13.3 | Framework UI multiplataforma |
-| **Dart** | 3.x | Lenguaje principal |
-| **sqflite** | ^2.4.4 | Persistencia SQLite local (Offline-First) |
-| **sqflite_common_ffi** | ^2.4.3 | SQLite en memoria para tests unitarios y de integración |
-| **provider** | ^6.1.5 | Gestión de estado (MVVM) |
-| **dartz** | ^0.10.1 | Programación funcional: `Either<Failure, T>` |
-| **equatable** | ^3.0.0 | Comparación de valor en entidades |
-| **uuid** | ^4.6.0 | Generación de UUIDs v4 para IDs |
-| **connectivity_plus** | ^7.3.1 | Detección de conectividad de red |
-| **intl** | ^0.20.3 | Internacionalización y formato de fechas/moneda |
-| **path_provider** | ^2.1.6 | Rutas de sistema de archivos |
-| **path** | ^1.9.1 | Manipulación de rutas |
-| **url_launcher** | ^6.3.1 | Apertura de enlaces externos y chat directo de WhatsApp |
-| **firebase_core** | ^4.15.0 | Inicialización de Firebase |
-| **firebase_auth** | ^6.7.0 | Autenticación Firebase |
-| **cloud_firestore** | ^6.10.0 | Backend remoto para sincronización real en tiempo real |
-| **mocktail** | ^1.0.5 | Mocking en tests unitarios |
+| Tecnología | Versión | Uso y Justificación |
+|------------|---------|---------------------|
+| **Flutter SDK** | `>= 3.13.3` | Framework de desarrollo UI multiplataforma nativo. |
+| **Dart** | `3.x` | Lenguaje orientado a objetos tipado con null-safety estricto. |
+| **sqflite** | `^2.4.4` | Motor de base de datos relacional local en SQLite para arquitectura Offline-First. |
+| **sqflite_common_ffi** | `^2.4.3` | Soporte de SQLite en memoria (`inMemoryDatabasePath`) para ejecución rápida de tests unitarios y de integración. |
+| **provider** | `^6.1.5` | Inyección de dependencias y gestión de estado reactivo mediante `ChangeNotifier`. |
+| **dartz** | `^0.10.1` | Programación funcional: `Either<Failure, T>` en la capa de casos de uso y repositorios. |
+| **equatable** | `^3.0.0` | Comparación de valor en entidades y modelos de dominio evitando boilerplate. |
+| **uuid** | `^4.6.0` | Generación de identificadores únicos universales (UUID v4) para registros locales y remotos. |
+| **connectivity_plus** | `^7.3.1` | Detección reactiva del estado de red (`WiFi`, `Móvil`, `Sin Conexión`). |
+| **intl** | `^0.20.3` | Formateo numérico en moneda (Bs.) y fechas estandarizadas. |
+| **url_launcher** | `^6.3.1` | Integración con enlaces externos y chat directo de WhatsApp con clientes y repartidores. |
+| **firebase_core** | `^4.15.0` | Inicialización del entorno Firebase. |
+| **cloud_firestore** | `^6.10.0` | Backend Cloud NoSQL para replicación bidireccional y escucha reactiva en tiempo real. |
+| **mocktail** | `^1.0.5` | Framework de mocking para pruebas unitarias sin dependencias externas. |
 
 ---
 
-## 5. Esquema de Base de Datos
+## 5. Esquema de Base de Datos SQLite
 
-SQLite — `PRAGMA foreign_keys = ON` activo. El esquema completo se carga desde `assets/sql/schema.sql` al inicializar la base de datos.
+La base de datos opera con **SQLite v2** y ejecución forzada de `PRAGMA foreign_keys = ON`.
 
 ```
+┌───────────────────────────────────────┐
+│               usuarios                │
+│───────────────────────────────────────│
+│ id (PK) • celular (UNIQUE)            │
+│ nombre • pin • role (admin/seller)    │
+│ tienda_nombre • activo                │
+└───────────────────────────────────────┘
+
 ┌──────────────┐     ┌───────────────┐     ┌──────────────┐     ┌──────────────┐
 │   clientes   │     │   products    │◄────│     lots     │     │  deliveries  │
 │──────────────│     │───────────────│  FK │──────────────│     │──────────────│
@@ -301,329 +337,252 @@ SQLite — `PRAGMA foreign_keys = ON` activo. El esquema completo se carga desde
                              │                                         │
                              └─────────────────────────────────────────┘
 
-┌──────────────────────────────────────┐     ┌──────────────┐
-│              sync_queue              │     │  promoters   │
-│──────────────────────────────────────│     │──────────────│
-│ id • table_name • operation          │     │ id (PK)      │
-│ payload (JSON) • created_at          │     │ name, phone  │
-│ status (PENDING/SYNCED/FAILED)       │     │ is_active    │
-│ retry_count                          │     └──────────────┘
-└──────────────────────────────────────┘
+┌──────────────────────────────────────┐     ┌──────────────┐     ┌──────────────┐
+│              sync_queue              │     │  promoters   │     │ reservations │
+│──────────────────────────────────────│     │──────────────│     │──────────────│
+│ id (PK) • table_name • operation     │     │ id (PK)      │     │ id (PK)      │
+│ payload (JSON) • created_at          │     │ name, phone  │     │ promoter_id  │
+│ status (PENDING/SYNCED/FAILED)       │     │ is_active    │     │ lot_id, qty  │
+│ retry_count                          │     └──────────────┘     │ expires_at   │
+└──────────────────────────────────────┘                          └──────────────┘
 ```
 
 ---
 
 ## 6. Módulos Implementados
 
-### 6.1 Módulo Inventory (Gestión de Inventarios)
-
-**Entidades:** `Product`, `Lot`
-
-**Lógica de negocio:**
-- SKU único por producto (validado a nivel de BD por constraint `UNIQUE`).
-- Cada ingreso de mercancía crea un **lote independiente** con su `real_unit_cost`, `promoter_base_price` y fecha de compra.
-- `Product.availableStock` = suma de `current_quantity` de lotes activos calculada dinámicamente.
-- `StockStatus`: `ok` / `lowStock` / `outOfStock` basado en `min_stock_threshold`.
-- Capital inmovilizado = $\sum (\text{lot.current\_qty} \times \text{lot.real\_unit\_cost})$.
-- Ganancia potencial estimada = $\sum ((\text{sell\_price} - \text{lot.cost}) \times \text{lot.current\_qty})$.
-- **Eliminación atómica en cascada:** Al eliminar un producto, se eliminan todos sus lotes asociados en una sola transacción SQLite y se registran operaciones `DELETE` en la `sync_queue`.
-
-**Casos de uso:**
-- `GetAllProducts`: Lista productos con lotes activos y stock disponible.
-- `CreateProductWithLotUseCase`: Alta transaccional de producto y lote inicial.
-- `AddLotUseCase`: Incorporación de lote a producto existente.
-- `ConsumeStockFifo`: Consumo de inventario por orden de antigüedad.
-- `UpdateProductUseCase`: Actualización de metadatos de producto.
-- `DeleteProductUseCase`: Eliminación atómica en cascada con réplica a Firestore.
-
-**UI:** `InventoryCatalogScreen` con búsqueda instantánea, filtros por estado (`Todos`, `Stock Bajo`, `Agotados`), `ProductCard` con acordeón de inspección de lotes (costo, fecha, disponibles vs. iniciales) y modales `AddProductLotSheet`, `AddLotSheet` y `EditProductSheet`.
+### 6.1 Módulo de Autenticación, Roles (RBAC) & Seguridad
+- **Entidades:** `User`, `UserRole` (`admin`, `seller`).
+- **Autenticación por Celular + PIN:** Validación contra base de datos local SQLite y sincronización bidireccional con la colección `users` en Firestore.
+- **Master Admins Sembrados:** Cuentas maestras de Administrador sembradas automáticamente de fábrica en la inicialización.
+- **Registro de Nuevos Vendedores con PIN de Seguridad:** Formulario `RegisterSellerView` que exige de forma obligatoria la autorización en tiempo real mediante `AdminApprovalDialog` (PIN maestro de Administrador) para poder dar de alta una nueva cuenta de vendedor.
+- **Navegación Dinámica por Roles en [`HomeShellView`](file:///d:/proyectos/electronic_store/lib/features/main/presentation/views/home_shell_view.dart):**
+  - **Administrador (`Admin`):** 4 Pestañas completas (**Inventario** con visualización de costos reales, creación/edición/borrado de productos y lotes; **POS** de cobro; **Dashboard** financiero global; **Promotores**).
+  - **Vendedor (`Seller`):** 3 Pestañas (**Catálogo** en modo consulta sin acceso a costos de compra ni acciones destructivas; **POS** comercial; **Dashboard** de ventas). Costos reales ocultos en toda la experiencia.
+- **Cierre de Sesión:** Diálogo de confirmación que limpia la sesión activa y redirige a la pantalla de Login.
 
 ---
 
-### 6.2 Módulo POS (Punto de Venta Avanzado)
-
-**Entidades:** `Sale`, `SaleItem`, `SaleDetail`
-
-**Lógica de negocio crítica:**
-- **Búsqueda instantánea multi-criterio:** Búsqueda en tiempo real por **Nombre**, **SKU** y **Marca** directamente en la vista del POS.
-- **Controles rápidos en catálogo POS:** Botones interactivos `+` y `-` directamente en la lista de productos con badge indicador de unidades seleccionadas.
-- **Selector y Diálogo de Personalización de Precios:** Diálogo `_showAddCustomPriceDialog` para ingresar cantidad deseada y seleccionar rápidamente entre precio **Estándar** o **Mayorista (Promotor)**, o fijar un precio unitario pactado ad-hoc.
-- **Validación de existencias:** Validación estricta que impide agregar al carrito cantidades superiores al stock disponible total.
-- **Regla anti-pérdida estricta:** Bloqueo de checkout si el total cobrado resulta inferior a la sumatoria de costos reales de compra ($\text{cartTotal} < \text{totalCostBase}$).
-- **FIFO Multi-Lote con Desglose Transaccional:** `processSale` descuenta lotes ordenados por `purchase_date ASC`, registrando en `detalle_ventas` cada tramo consumido con su `lote_id`, `costo_unitario_compra` y `precio_unitario_cobrado`.
-- **Integración CRM en Checkout:** Selector de clientes registrados con opción a alta rápida ("Nuevo Cliente CRM") sin abandonar la venta.
-- **Asignación de Repartidores & Delivery:** Selección de modalidad `TIENDA` o `DELIVERY`, asignación de repartidor desde el directorio local y flete adicional configurable.
-- **Descuento Global:** Aplicación de descuento comercial global recalculado en tiempo real.
-- **Devoluciones (24h):** `voidSale()` valida la ventana de 24h, restituye el stock al lote original y anula financieramente la venta en SQLite y Firestore.
-
-**UI:** `PosSalesView` con buscador, controles inline `+/-`, botón de acceso a repartidores, `CheckoutBottomSheet` avanzado y diálogo `VoidSaleDialog`.
+### 6.2 Módulo de Inventario (FIFO & Costeo por Lotes)
+- **Entidades:** `Product`, `Lot`.
+- **Lógica de Costeo:** Cada ingreso físico genera un lote con su `real_unit_cost` y `purchase_date`. El stock disponible se calcula como $\sum \text{current\_quantity}$ de los lotes activos.
+- **Métricas Patrimoniales:** Cálculo dinámico de capital inmovilizado y margen potencial proyectado.
+- **Eliminación Atómica en Cascada:** Borrado seguro de producto y sus lotes asociados en SQLite con propagación de eventos `DELETE` a Firestore.
 
 ---
 
-### 6.3 Módulo CRM de Clientes (`features/clients`)
-
-**Entidades:** `Client`
-
-**Lógica de negocio:**
-- Registro de clientes con `nombreAlias`, `telefonoWhatsapp`, `direccionPredet` y fecha de creación.
-- Cliente predeterminado por defecto: "Cliente Mostrador".
-- Persistencia local inmediata en SQLite (`clientes`) y encolamiento automático en `sync_queue` (`clients`).
-- Sincronización reactiva bidireccional mediante `listenToRemoteClients()` en Firestore.
-
-**Casos de uso:**
-- `GetClientsUseCase`: Obtiene el catálogo de clientes ordenados alfabéticamente.
-- `SaveClientUseCase`: Guarda o actualiza un cliente localmente y genera la mutación de sincronización.
+### 6.3 Módulo de Punto de Venta (POS Avanzado)
+- **Búsqueda Instantánea Multi-Campo:** Filtrado reactivo en tiempo real por **Nombre**, **SKU** y **Marca**.
+- **Controles Inline y Ajuste Rápido:** Botones `+` / `-` en lista y diálogo de cantidad y precio pactado (Estándar vs. Mayorista / Promotor).
+- **Regla Anti-Pérdida Transaccional:** Validación que impide completar ventas si el total cobrado es inferior a la suma ponderada del costo real de compra ($\text{cartTotal} < \text{totalCostBase}$).
+- **Descuento FIFO en Cascada:** Consumo cronológico de lotes registrando en `detalle_ventas` (`sale_details`) el tramo, lote, costo unitario y precio unitario cobrado.
+- **Checkout Avanzado:** Selección o alta rápida de cliente CRM, selección de despacho (`TIENDA` o `DELIVERY` con flete), método de pago (`EFECTIVO`, `QR`, `TRANSFERENCIA`, `TARJETA`) y descuento global.
+- **Devoluciones (24 Horas):** Diálogo `VoidSaleDialog` para anulación de transacciones con restitución íntegra de stock al lote correspondiente.
 
 ---
 
-### 6.4 Módulo de Repartidores & Deliveries (`features/deliveries`)
-
-**Entidades:** `Delivery`
-
-**Lógica de negocio:**
-- Registro de repartidores con `nombre`, `telefono`, `vehiculo` y estado `activo`.
-- Administración completa (Crear, Editar, Activar/Desactivar, Eliminar) mediante `DeliveryManagementDialog`.
-- Persistencia en SQLite (`deliveries`) y sincronización reactiva en tiempo real con Firestore (`deliveries`).
-- Vinculación directa con ventas (`delivery_id`, `delivery_name`, `delivery_fee`).
-
-**Casos de uso:**
-- `GetDeliveriesUseCase`: Lista repartidores registrados.
-- `SaveDeliveryUseCase`: Crea o edita repartidores y encola operación `INSERT` / `UPDATE`.
-- `DeleteDeliveryUseCase`: Da de baja el repartidor y encola operación `DELETE`.
+### 6.4 Módulo CRM de Clientes
+- **Entidades:** `Client`.
+- **Directorio Local & Remoto:** Persistencia en SQLite (`clientes`) y réplica automática en Firestore (`clients`).
+- **Alta Rápida en Venta:** Modal "Nuevo Cliente CRM" integrado en el flujo de cobro sin perder el estado del carrito.
 
 ---
 
-### 6.5 Módulo Promoters (Promotores & Dropshipping)
-
-**Entidades:** `Promoter`, `Commission`
-
-**Lógica de negocio:**
-- Cada promotor tiene un `commissionRate` configurable (0–100%).
-- Catálogo RBAC: costos reales de compra (`real_unit_cost`) ocultos para perfiles de promotores.
-- `calculate_commission.dart`: calcula la comisión respetando el precio piso del producto.
-- Reservas de stock de 12 horas en SQLite (`reservations`) con TTL automático.
-
-**UI:** `PromotersView` con listado reactivo de promotores, estados activos/inactivos y métricas de comisión integrada en la barra de navegación principal.
+### 6.5 Módulo de Repartidores & Deliveries
+- **Entidades:** `Delivery`.
+- **CRUD Completo:** Diálogo `DeliveryManagementDialog` accesible desde el `AppBar` del POS para crear, editar, activar/desactivar y eliminar repartidores.
+- **Atribución de Ventas:** Registro de repartidor y flete en la cabecera de la venta.
 
 ---
 
-### 6.6 Módulo Dashboard (Finanzas & Reportes)
+### 6.6 Módulo de Promotores & Dropshipping
+- **Entidades:** `Promoter`, `Commission`.
+- **Cálculo de Comisiones:** Algoritmo que respeta el precio piso del producto asegurando el margen del negocio.
+- **Reservas Temporales (12h TTL):** Bloqueo transaccional de stock en SQLite (`reservations`) con liberación automática al vencer.
 
-**Entidades:** `DashboardSummary`, `FinancialMetrics`
+---
 
-**Lógica de negocio:**
-- **Balance patrimonial en vivo:** Cálculo instantáneo de capital inmovilizado en stock y ganancia potencial total.
-- **Arqueo diario de caja:** Desglose por método de pago (`EFECTIVO`, `QR`, `TRANSFERENCIA`, `TARJETA`) de ingreso bruto, capital recuperado y utilidad neta real.
-- **Historial de ventas del día:** Registro y listado cronológico de ventas por fecha seleccionada con hora, total cobrado, método de pago, cliente e ítems vendidos.
-- **Canal de utilidades:** Distribución comparativa entre ventas de mostrador directas vs. ventas por canal de promotores.
-
-**UI:** `DashboardOverviewView` con selector interactivo de fechas (`DatePicker`), 3 tarjetas resumen clave (Total Ventas, Ganancia Neta Real, Capital Inmovilizado), historial diario y desglose de arqueo por método de pago.
+### 6.7 Módulo de Dashboard & Arqueo Diario
+- **Balance Patrimonial:** Capital inmovilizado en stock y ganancia neta consolidada.
+- **Arqueo Diario de Caja:** Desglose exacto de ingresos brutos, capital recuperado y utilidad real agrupado por método de pago.
+- **Historial de Ventas:** Filtro por fecha interactivo (`DatePicker`) con detalle pormenorizado de ítems y clientes atendidos.
 
 ---
 
 ## 7. Motor Offline-First y Sincronización en Tiempo Real
 
-### Arquitectura de Sincronización Multidispositivo
-
 ```
-[ Dispositivo A ]                                  [ Cloud Firestore ]                              [ Dispositivo B ]
-Venta / Cliente / Repartidor                           Colecciones:                                 Escucha Reactiva
-       ↓                                          - products                                               ↓
-SQLite (ACID txn)                                 - lots                                            SyncManager (Streams)
-       ↓                                          - sales (con sale_details)                               ↓
-sync_queue (PENDING)                              - clients                                         SyncLocalDataSource
-       ↓                                          - deliveries                                             ↓
-SyncManager (FIFO Push) ───────────────────────────────┘                                            Actualiza SQLite local
-                                                                                                           ↓
-                                                                                                    Notifica UI Reactiva
+[ Dispositivo A (Venta / Cliente / Repartidor / Usuario) ]
+                       ↓
+         SQLite Transaccional (ACID)
+                       ↓
+             sync_queue (PENDING)
+                       ↓
+            SyncManager (FIFO Push)
+                       │
+                       ▼
+          [ Cloud Firestore Backend ]
+           - products
+           - lots
+           - sales (con sale_details)
+           - clients
+           - deliveries
+           - users
+                       │
+                       ▼
+            SyncManager (Streams)
+                       ↓
+           [ Dispositivo B (Escucha) ]
+                       ↓
+             Actualización SQLite
+                       ↓
+             Notificación UI Reactiva
 ```
 
-**Componentes:**
-
-| Clase | Archivo | Rol |
-|-------|---------|-----|
-| `SyncManager` | `core/sync/domain/services/sync_manager.dart` | Orquestador reactivo. Escucha cambios de red y procesa la cola FIFO hacia Firestore |
-| `SyncLocalDataSourceImpl` | `core/sync/data/datasources/sync_local_datasource.dart` | Persistencia y gestión de `sync_queue` en SQLite y sincronización de colecciones |
-| `FirestoreRemoteDataSource` | `core/sync/data/datasources/firestore_remote_data_source.dart` | Implementación real conectada a Cloud Firestore (INSERT/UPDATE/DELETE en cascada) |
-| `MockRemoteSyncDataSource` | `core/sync/data/datasources/remote_sync_datasource.dart` | Mock para pruebas unitarias sin dependencias de red |
-| `SyncOperationModel` | `core/sync/data/models/sync_operation_model.dart` | DTO de operaciones pendientes |
-
-**Resolución de conflictos:** `First-Write-Wins` sustentado en `clientTimestamp` ISO-8601 preservado en cada mutación.
-
-**Indicador de Conectividad en UI:** `HomeShellView` cuenta con un monitor en el `AppBar`:
-- 🟢 Icono `cloud_done`: sincronizado con Firestore.
-- 🟠 Icono `cloud_off` + badge numérico: operando offline con $N$ transacciones en cola pendientes de sincronizar.
+- **Resolución de Conflictos:** Algoritmo `First-Write-Wins` con preservación de `clientTimestamp` ISO-8601.
+- **Monitor de Conectividad en UI:** Indicador visual en el `AppBar` con estados en vivo:
+  - 🟢 **En Línea:** Icono `cloud_done` indicando base de datos sincronizada.
+  - 🟠 **Fuera de Línea:** Icono `cloud_off` + badge con conteo de operaciones pendientes en cola.
 
 ---
 
 ## 8. Matriz de Cumplimiento Funcional
 
-| RF | Descripción | Archivo Principal | Estado |
-|----|-------------|-------------------|--------|
-| RF-01 | SKU Único por producto | `inventory_local_data_source.dart` | ✅ |
-| RF-02 | Lotes independientes con costo real | `lot.dart`, `lot_model.dart` | ✅ |
-| RF-03 | Stock en tiempo real y agregado | `product.dart` (`availableStock`) | ✅ |
-| RF-04 | Alertas de reposición (`StockStatus`) | `product.dart`, `stock_status_badge.dart` | ✅ |
-| RF-05 | Capital inmovilizado en tiempo real | `product.dart`, `inventory_viewmodel.dart` | ✅ |
-| RF-06 | Buscador POS dinámico (Nombre, SKU, Marca) | `pos_viewmodel.dart`, `pos_sales_view.dart` | ✅ |
-| RF-07 | Validación estricta de existencias | `pos_viewmodel.dart` (`addItem`) | ✅ |
-| RF-08 | Regla anti-pérdida (precio >= costo) | `pos_viewmodel.dart` (`checkout`) | ✅ |
-| RF-09 | Descuento FIFO por lote | `pos_local_datasource.dart` | ✅ |
-| RF-10 | Métodos de pago múltiples (Efectivo, QR, Transf., Tarjeta) | `sale.dart`, `checkout_bottom_sheet.dart` | ✅ |
-| RF-11 | Opciones de despacho (Delivery / Tienda con flete) | `sale.dart`, `checkout_bottom_sheet.dart` | ✅ |
-| RF-12 | FIFO en cascada multi-lote con desglose (`detalle_ventas`) | `pos_local_datasource.dart`, `sale_detail.dart` | ✅ |
-| RF-13 | CRM de Clientes (Directorio, Teléfono, WhatsApp, Dirección) | `client.dart`, `client_local_datasource.dart` | ✅ |
-| RF-14 | Devoluciones en ventana de 24h | `pos_local_datasource.dart` (`voidSale`) | ✅ |
-| RF-15 | Reintegración al lote + neutralización financiera | `pos_local_datasource.dart` | ✅ |
-| RF-16 | Margen base promotor (`commissionRate`) | `promoter.dart` | ✅ |
-| RF-17 | Catálogo RBAC (costos ocultos) | `promoters_viewmodel.dart` | ✅ |
-| RF-18 | Precio piso respetado | `calculate_commission.dart` | ✅ |
-| RF-19 | Sincronización de stock visible multidispositivo | `inventory_viewmodel.dart`, `sync_manager.dart` | ✅ |
-| RF-20 | Reservas dropshipping 12h | `schema.sql` → tabla `reservations` | ✅ |
-| RF-21 | TTL y retorno de stock automático | `promoter_local_datasource.dart` | ✅ |
-| RF-22 | Liquidación de ganancias compartidas | `calculate_commission.dart` | ✅ |
-| RF-23 | Gestión de Repartidores & Asignación en POS | `delivery.dart`, `delivery_management_dialog.dart` | ✅ |
-| RF-24 | Balance patrimonial en vivo | `get_financial_overview_usecase.dart` | ✅ |
-| RF-25 | Arqueo diario de flujos por método de pago | `get_daily_cash_audit_usecase.dart` | ✅ |
-| RF-26 | Separación costo reposición / ganancia neta | `dashboard_local_datasource.dart` | ✅ |
-| RF-27 | Precios pactados y descuentos comerciales en POS | `pos_viewmodel.dart`, `pos_sales_view.dart` | ✅ |
-| RF-28 | Sincronización Firestore en tiempo real (5 colecciones) | `firestore_remote_data_source.dart`, `sync_manager.dart` | ✅ |
+| RF | Descripción | Archivo / Componente Principal | Estado |
+|----|-------------|--------------------------------|--------|
+| **RF-01** | SKU único por producto | `inventory_local_data_source.dart` | ✅ |
+| **RF-02** | Lotes independientes con costo real | `lot.dart`, `lot_model.dart` | ✅ |
+| **RF-03** | Stock consolidado en tiempo real | `product.dart` (`availableStock`) | ✅ |
+| **RF-04** | Alertas de stock bajo y agotado | `stock_status_badge.dart` | ✅ |
+| **RF-05** | Cálculo de capital inmovilizado | `inventory_viewmodel.dart` | ✅ |
+| **RF-06** | Buscador POS multi-criterio (Nombre, SKU, Marca) | `pos_sales_view.dart`, `pos_viewmodel.dart` | ✅ |
+| **RF-07** | Validación estricta de existencias | `pos_viewmodel.dart` | ✅ |
+| **RF-08** | Regla anti-pérdida (precio $\ge$ costo) | `pos_viewmodel.dart` (`violatesAntiLoss`) | ✅ |
+| **RF-09** | Descuento FIFO transaccional por lote | `pos_local_datasource.dart` | ✅ |
+| **RF-10** | Múltiples métodos de pago (Efectivo, QR, Transf., Tarjeta) | `checkout_bottom_sheet.dart` | ✅ |
+| **RF-11** | Modalidad de despacho (Tienda / Delivery con flete) | `checkout_bottom_sheet.dart` | ✅ |
+| **RF-12** | Desglose FIFO en `detalle_ventas` (`sale_details`) | `sale_detail_model.dart`, `pos_local_datasource.dart` | ✅ |
+| **RF-13** | CRM de Clientes con autocompletado y alta rápida | `client_local_datasource.dart`, `checkout_bottom_sheet.dart` | ✅ |
+| **RF-14** | Devoluciones y anulación en ventana de 24 horas | `void_sale_dialog.dart`, `pos_local_datasource.dart` | ✅ |
+| **RF-15** | Restitución de stock al lote original | `pos_local_datasource.dart` (`voidSale`) | ✅ |
+| **RF-16** | Margen base promotor (`commissionRate`) | `promoter.dart` | ✅ |
+| **RF-17** | Catálogo RBAC (Costos de compra ocultos para vendedores) | `inventory_catalog_screen.dart`, `product_card.dart` | ✅ |
+| **RF-18** | Precio piso respetado en dropshipping | `calculate_commission.dart` | ✅ |
+| **RF-19** | Sincronización en vivo multidispositivo | `sync_manager.dart`, `firestore_remote_data_source.dart` | ✅ |
+| **RF-20** | Reservas temporales dropshipping (12h TTL) | `schema.sql` → tabla `reservations` | ✅ |
+| **RF-21** | Gestión y asignación de Repartidores / Deliveries | `delivery_management_dialog.dart`, `delivery_local_datasource.dart` | ✅ |
+| **RF-22** | Balance patrimonial en vivo en Dashboard | `dashboard_viewmodel.dart`, `get_financial_overview_usecase.dart` | ✅ |
+| **RF-23** | Arqueo diario de caja por método de pago | `dashboard_overview_view.dart`, `get_daily_cash_audit_usecase.dart` | ✅ |
+| **RF-24** | Precios pactados y descuentos comerciales en POS | `pos_sales_view.dart`, `checkout_bottom_sheet.dart` | ✅ |
+| **RF-25** | Autenticación de usuarios por Celular + PIN | `login_view.dart`, `auth_viewmodel.dart` | ✅ |
+| **RF-26** | Control de Acceso Basado en Roles (Admin / Seller) | `user.dart`, `home_shell_view.dart` | ✅ |
+| **RF-27** | Aprobación de nuevos vendedores con PIN de Administrador | `register_seller_view.dart`, `admin_approval_dialog.dart` | ✅ |
+| **RF-28** | Persistencia y recuperación de sesión offline | `auth_local_datasource.dart`, `auth_repository_impl.dart` | ✅ |
+| **RF-29** | Siembra automática de Administradores Maestros | `seed_master_admins_usecase.dart` | ✅ |
+| **RF-30** | Migración SQLite v2 y creación defensiva de tablas | `database_helper.dart` (`_onUpgrade`) | ✅ |
+| **RF-31** | Cierre seguro de sesión con confirmación | `home_shell_view.dart` (`_handleLogout`) | ✅ |
+| **RF-32** | Replicación Firestore en 6 colecciones en tiempo real | `firestore_remote_data_source.dart` | ✅ |
 
 ---
 
 ## 9. Requisitos No Funcionales
 
-| RNF | Descripción | Estado |
-|-----|-------------|--------|
-| **RNF-01 Offline-First** | Todas las escrituras pasan primero por SQLite + `sync_queue`. Operación 100% offline garantizada. | ✅ |
-| **RNF-02 Rendimiento** | Búsquedas en memoria sobre colecciones en `ChangeNotifier`. Consultas indexadas en SQLite. | ✅ |
-| **RNF-03 Consistencia ACID** | Transacciones `db.transaction()` en cascada con integridad referencial. Sincronización `First-Write-Wins`. | ✅ |
-| **RNF-04 Seguridad RBAC** | Costos de adquisición ocultos en vistas de promotores y perfiles restringidos. | ✅ |
-| **RNF-05 UX Móvil** | `BottomSheets` responsivos, teclados numéricos contextuales y controles táctiles directos `+/-`. | ✅ |
-| **RNF-06 Multiplataforma** | Flutter nativo para Android / iOS con configuración Firebase por plataforma. | ✅ |
+| RNF | Especificación | Estado |
+|-----|----------------|--------|
+| **RNF-01 Offline-First Total** | 100% de operaciones funcionales sin conexión a Internet; almacenamiento transaccional local en SQLite y despacho asíncrono. | ✅ |
+| **RNF-02 Rendimiento & Baja Latencia** | Búsquedas en memoria sobre colecciones cacheadas en `ChangeNotifier`. Consultas indexadas en SQLite. | ✅ |
+| **RNF-03 Integridad Transaccional ACID** | Uso estricto de `db.transaction()` para operaciones multi-tabla (productos, lotes, ventas, detalles, usuarios). | ✅ |
+| **RNF-04 Seguridad y Privacidad** | Datos de costo de compra inaccesibles para el perfil `Seller`. Aprobación protegida por PIN maestro. | ✅ |
+| **RNF-05 Ergonomía Móvil** | `BottomSheets` responsivos, teclados numéricos contextuales y botones táctiles optimizados para tablets y teléfonos. | ✅ |
+| **RNF-06 Calidad de Código y Testing** | 0 warnings en `flutter analyze` y suite de 61 tests automatizados superados con 100% de éxito. | ✅ |
 
 ---
 
-## 10. Pendientes y Deuda Técnica
+## 10. Seguridad & Credenciales de Fábrica
 
-### 🟢 Resueltos en v1.2.0
+Para entornos de desarrollo, pruebas y configuración inicial de sucursales, el sistema inicializa dos cuentas maestras de Administrador:
 
-- ✅ **P-01 Resuelto:** Dashboard e Historial de Ventas integrado como pestaña principal en `HomeShellView`.
-- ✅ **P-02 Resuelto:** Módulo Promotores integrado en `HomeShellView` e inyectado en `main.dart`.
-- ✅ **P-04 Resuelto:** `FirestoreRemoteDataSource` conectada como fuente remota real y reactiva en `main.dart`.
-- ✅ **P-07 Resuelto:** Módulo CRM de Clientes y Gestión de Repartidores integrados con selector en `CheckoutBottomSheet`.
+| Rol | Nombre | Celular | PIN de Acceso | Tienda / Sucursal |
+|-----|--------|---------|---------------|-------------------|
+| **Admin Maestro 1** | Abdiel Perez Cossio | `67606367` | `696910` | Almacén Central |
+| **Admin Maestro 2** | Arianna Duran Nava | `77111575` | `000000` | Almacén Central |
 
----
-
-### 🔴 Crítico — Siguientes Pasos
-
-| # | Descripción | Impacto | Archivo(s) Relacionado(s) |
-|---|-------------|---------|--------------------------|
-| **P-03** | **Firebase Auth & Login:** Implementar pantalla de inicio de sesión, registro de usuarios y control de sesiones seguras antes de acceder a la shell principal. | Alto | `main.dart`, flujo de Auth |
+> ⚠️ **Nota de Seguridad:** Estos PINs maestros son los únicos autorizados para desbloquear el diálogo de aprobación (`AdminApprovalDialog`) durante el registro de nuevos vendedores.
 
 ---
 
-### 🟡 Importante — Mejoras y Completación
-
-| # | Descripción | Impacto |
-|---|-------------|---------|
-| **P-05** | **Limpieza de stub legacy:** Eliminar archivo obsoleto `lib/data/sync/sync_manager.dart`. | Bajo |
-| **P-06** | **Migraciones SQLite:** Implementar lógica de migración en `DatabaseHelper._onUpgrade` al incrementar versión de DB. | Medio |
-
----
-
-### 🟢 Mejoras Opcionales / Futuro
-
-| # | Descripción |
-|---|-------------|
-| **P-10** | `RetryPolicy` con backoff exponencial para operaciones fallidas en `SyncManager`. |
-| **P-11** | Aplicar el tema global `AppTheme` en `main.dart`. |
-| **P-12** | Paginación virtualizada para catálogos con más de 10,000 productos. |
-| **P-13** | Soporte para subida y visualización de imágenes de productos (Firebase Storage). |
-| **P-14** | Exportación de reportes financieros a PDF y Excel/CSV desde el Dashboard. |
-| **P-15** | Notificaciones push (FCM) ante alertas de stock mínimo o quiebre de inventario. |
-
----
-
-## 11. Guía de Ejecución
+## 11. Guía de Ejecución y Pruebas
 
 ### Prerrequisitos
-- Flutter SDK >= 3.13.3
-- Dart SDK >= 3.x
-- Dispositivo físico o emulador Android / simulador iOS
-- Archivo `android/app/google-services.json` configurado
+- **Flutter SDK** `>= 3.13.3`
+- **Dart SDK** `>= 3.x`
+- Archivo de configuración Firebase `android/app/google-services.json` configurado.
 
-### Comandos Principales
+### Comandos de Terminal
 
 ```bash
-# 1. Clonar el repositorio
-git clone https://gitlab.com/indecorp-group/electronic_store.git
-cd electronic_store
-
-# 2. Instalar dependencias
+# 1. Obtener dependencias del proyecto
 flutter pub get
 
-# 3. Análisis estático (calidad de código)
+# 2. Ejecutar análisis estático (0 issues garantizados)
 flutter analyze
 
-# 4. Ejecutar suite de pruebas unitarias y de integración
+# 3. Ejecutar la suite completa de pruebas unitarias y de integración
 flutter test
 
-# 5. Ejecutar la aplicación en modo desarrollo
+# 4. Ejecutar la aplicación en dispositivo o emulador
 flutter run
 
-# 6. Compilar paquete para producción (Android APK)
+# 5. Generar paquete de producción para Android (APK Release)
 flutter build apk --release
 ```
 
 ---
 
-## 12. Historial de Cambios
+## 12. Historial de Versiones (Changelog)
 
-### v1.2.0 — POS Avanzado, CRM de Clientes, Gestión de Repartidores y Desglose FIFO Detallado
+### v1.3.0 — Autenticación, Roles (RBAC), Seguridad & Migración SQLite v2
 *Octubre 2026*
-
-- 👥 **Módulo CRM de Clientes (`features/clients`):**
-  - Entidad `Client`, persistencia en tabla `clientes` y sincronización reactiva con la colección `clients` en Firestore.
-  - Autocompletado y diálogo de alta rápida de nuevos clientes ("Nuevo Cliente CRM") directamente dentro del modal de checkout.
-- 🛵 **Módulo de Repartidores & Delivery (`features/deliveries`):**
-  - Entidad `Delivery`, CRUD completo con diálogo `DeliveryManagementDialog`.
-  - Atribución de repartidor en ventas a domicilio (`delivery_id`, `delivery_name`, `delivery_fee`), persistencia en SQLite y réplica en Firestore.
-- 🛒 **POS Avanzado & Flexibilidad Comercial:**
-  - Búsqueda instantánea multi-campo por **Nombre**, **SKU** y **Marca**.
-  - Selector de precios pactados con chips rápidos de precio **Estándar** vs. **Mayorista (Promotor)**.
-  - Diálogo de personalización de precio unitario cobrado y cantidad por producto.
-  - Edición de precios en el carrito de compras y campo de **Descuento Global**.
-- 📊 **Desglose FIFO Detallado (`detalle_ventas` / `sale_details`):**
-  - Registro pormenorizado en SQLite y Firestore de cada lote consumido, costo unitario de compra y precio unitario cobrado por tramo.
-- 🔄 **Sincronización Firestore Ampliada:**
-  - Canales de escucha en tiempo real (`Stream`) añadidos para `clients` y `deliveries`.
-  - Replicación de `sale_details` en el payload de sincronización de ventas.
-- 🧪 **Suite de Pruebas de Integración y POS Avanzado:**
-  - Incorporación de `pos_advanced_crm_sales_sync_test.dart` validando el flujo completo de CRM, Deliveries, precios custom y réplica remota.
+- 🔐 **Módulo de Autenticación (`features/auth`):**
+  - Implementación de `User`, `UserModel` y `UserRole` (`admin`, `seller`).
+  - Inicio de sesión por Celular + PIN con soporte Offline-First y persistencia de sesión.
+  - Formulario de registro de vendedores (`RegisterSellerView`) protegido por PIN maestro de Administrador (`AdminApprovalDialog`).
+- 🛡️ **Control de Acceso Basado en Roles (RBAC):**
+  - `HomeShellView` dinámico: 4 pestañas para Administradores (con acceso a costos, promotores y edición) y 3 pestañas para Vendedores (costos ocultos, modo consulta).
+  - Encabezado con información del usuario activo, rol, sucursal y botón de cierre de sesión seguro.
+- 🗄️ **Migración de Base de Datos SQLite v2:**
+  - Actualización de `AppConstants.dbVersion = 2`.
+  - Implementación de `DatabaseHelper._onUpgrade` y `_createMissingTables` para creación defensiva de tablas `clientes`, `deliveries`, `usuarios` y compatibilidad retroactiva.
+- 🧪 **Suite de Pruebas Ampliada:**
+  - Incorporación de pruebas para Auth (`auth_viewmodel_test.dart`, `auth_repository_impl_test.dart`, `auth_views_widget_test.dart`, `user_model_test.dart`) y migración de BD (`database_helper_migration_test.dart`). 61/61 tests superados exitosamente.
 
 ---
 
-### v1.1.0 — Navegación Unificada, Sincronización Real con Firestore y CRUD Completo
+### v1.2.0 — POS Avanzado, CRM de Clientes, Deliveries & Desglose FIFO
 *Octubre 2026*
+- 👥 **Módulo CRM de Clientes:** Directorio `clientes`, autocompletado y alta rápida en checkout.
+- 🛵 **Módulo de Repartidores & Delivery:** CRUD en `deliveries`, selección de despacho a domicilio y fletes.
+- 🛒 **Flexibilidad Comercial en POS:** Búsqueda por Nombre/SKU/Marca, controles `+/-`, precios pactados (Estándar vs. Mayorista) y descuentos globales.
+- 📊 **Desglose FIFO Transaccional:** Registro pormenorizado en `detalle_ventas` (`sale_details`) con lote y costo exacto por tramo.
 
-- 🚀 **Navegación 4-Tabs en `HomeShellView`:** Integración de Inventario, POS, Dashboard y Promotores en el `BottomNavigationBar`.
-- ☁️ **Sincronización Real con Cloud Firestore:** Conexión de `FirestoreRemoteDataSource` en `main.dart`, soportando operaciones `INSERT`, `UPDATE` y `DELETE` en cascada.
-- 🔄 **Sincronización Multidispositivo en Vivo:** `SyncManager.startRealtimeSync()` activo al iniciar la app.
-- 📦 **CRUD Completo de Inventario:** Edición y eliminación en cascada de productos y lotes.
+---
+
+### v1.1.0 — Navegación Unificada, Sincronización Real Firestore & CRUD Completo
+*Octubre 2026*
+- 🚀 **Navegación 4-Tabs:** Shell principal unificada con selector reactivo.
+- ☁️ **Sincronización Real en Tiempo Real:** Integración con Cloud Firestore (`FirestoreRemoteDataSource`).
+- 📦 **CRUD de Inventario:** Edición y borrado atómico en cascada de productos y lotes.
 
 ---
 
 ### v1.0.0 — Baseline Inicial
 *Septiembre 2026*
-
 - ✅ Arquitectura limpia modular (Domain / Data / Presentation).
-- ✅ Motor de costeo FIFO y reglas anti-pérdida.
-- ✅ Persistencia SQLite local con soporte para `sync_queue`.
-- ✅ Gestión de ventas, devoluciones en ventana de 24h y cálculo de comisiones para promotores.
-- ✅ Dashboard financiero base con balance patrimonial y arqueo diario.
+- ✅ Motor de costeo FIFO y regla anti-pérdida.
+- ✅ Persistencia SQLite local con `sync_queue`.
+- ✅ Devoluciones en ventana de 24h y cálculo de comisiones para promotores.
 
 ---
 
-*Documento mantenido por el equipo de desarrollo — INDECORP Group.*  
+*Memoria técnica desarrollada y mantenida por el equipo de ingeniería — INDECORP Group.*  
 *Última actualización: Octubre 2026.*

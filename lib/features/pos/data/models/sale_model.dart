@@ -23,6 +23,7 @@ class SaleModel extends Sale {
     super.customerName,
     super.customerPhone,
     super.isLocked,
+    super.storeLocation = 'ALMACEN',
   });
 
   factory SaleModel.fromMap(
@@ -100,6 +101,7 @@ class SaleModel extends Sale {
       customerName: (map['customer_name'] as String?) ?? (map['nombre_alias'] as String?),
       customerPhone: (map['customer_phone'] as String?) ?? (map['telefono_whatsapp'] as String?),
       isLocked: map['is_locked'] == 1 || map['is_locked'] == true,
+      storeLocation: (map['store_location'] ?? map['storeLocation'] ?? map['location'] ?? map['ubicacion'] ?? 'TIENDA').toString().toUpperCase().trim().contains('ALMACEN') ? 'ALMACEN' : 'TIENDA',
     );
   }
 
@@ -123,6 +125,7 @@ class SaleModel extends Sale {
       customerName: sale.customerName,
       customerPhone: sale.customerPhone,
       isLocked: sale.isLocked,
+      storeLocation: sale.storeLocation,
     );
   }
 
@@ -150,6 +153,8 @@ class SaleModel extends Sale {
         'promoter_id': promoterId,
         'notes': notes,
         'total': total,
+        'store_location': storeLocation,
+        'location': storeLocation,
         'sale_details': details.isNotEmpty
             ? details.map((d) {
                 if (d is SaleDetailModel) return d.toMap();
