@@ -24,6 +24,7 @@ class SaleModel extends Sale {
     super.customerPhone,
     super.isLocked,
     super.storeLocation = 'ALMACEN',
+    super.usuarioId,
   });
 
   factory SaleModel.fromMap(
@@ -82,6 +83,9 @@ class SaleModel extends Sale {
       )).toList();
     }
 
+    final rawLocation = (map['origen_venta'] ?? map['origenVenta'] ?? map['store_location'] ?? map['storeLocation'] ?? map['location'] ?? map['ubicacion'] ?? 'ALMACEN').toString().toUpperCase().trim();
+    final parsedLocation = rawLocation == 'TIENDA' ? 'TIENDA' : 'ALMACEN';
+
     return SaleModel(
       id: (map['id'] as String?) ?? '',
       clienteId: (map['cliente_id'] as String?),
@@ -101,7 +105,8 @@ class SaleModel extends Sale {
       customerName: (map['customer_name'] as String?) ?? (map['nombre_alias'] as String?),
       customerPhone: (map['customer_phone'] as String?) ?? (map['telefono_whatsapp'] as String?),
       isLocked: map['is_locked'] == 1 || map['is_locked'] == true,
-      storeLocation: (map['store_location'] ?? map['storeLocation'] ?? map['location'] ?? map['ubicacion'] ?? 'TIENDA').toString().toUpperCase().trim().contains('ALMACEN') ? 'ALMACEN' : 'TIENDA',
+      storeLocation: parsedLocation,
+      usuarioId: (map['usuario_id'] ?? map['usuarioId'] ?? map['user_id']) as String?,
     );
   }
 
@@ -126,6 +131,7 @@ class SaleModel extends Sale {
       customerPhone: sale.customerPhone,
       isLocked: sale.isLocked,
       storeLocation: sale.storeLocation,
+      usuarioId: sale.usuarioId,
     );
   }
 
@@ -155,6 +161,8 @@ class SaleModel extends Sale {
         'total': total,
         'store_location': storeLocation,
         'location': storeLocation,
+        'origen_venta': storeLocation,
+        'usuario_id': usuarioId,
         'sale_details': details.isNotEmpty
             ? details.map((d) {
                 if (d is SaleDetailModel) return d.toMap();
@@ -218,6 +226,9 @@ class SaleModel extends Sale {
         'customer_phone': customerPhone,
         'promoter_id': promoterId,
         'notes': notes,
+        'store_location': storeLocation,
+        'origen_venta': storeLocation,
+        'usuario_id': usuarioId,
       };
 
   Map<String, dynamic> toSqliteSalesMap() => {
@@ -242,5 +253,8 @@ class SaleModel extends Sale {
         'promoter_id': promoterId,
         'notes': notes,
         'is_locked': isLocked ? 1 : 0,
+        'store_location': storeLocation,
+        'origen_venta': storeLocation,
+        'usuario_id': usuarioId,
       };
 }

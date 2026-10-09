@@ -10,6 +10,7 @@ import '../../../inventory/presentation/screens/inventory_catalog_screen.dart';
 import '../../../inventory/presentation/viewmodels/inventory_viewmodel.dart';
 
 import '../../../dashboard/presentation/views/dashboard_overview_view.dart';
+import '../../../dashboard/presentation/views/seller_dashboard_view.dart';
 import '../../../dashboard/presentation/viewmodels/dashboard_viewmodel.dart';
 import '../../../promoters/presentation/views/promoters_view.dart';
 import '../../../promoters/presentation/viewmodels/promoters_viewmodel.dart';
@@ -38,7 +39,15 @@ class _HomeShellViewState extends State<HomeShellView> {
         if (mounted) {
           context.read<InventoryViewModel>().loadProducts();
           context.read<PosViewModel>().loadProducts();
-          context.read<DashboardViewModel>().loadDashboardData();
+          final auth = context.read<AuthViewModel>();
+          if (auth.isAdmin) {
+            context.read<DashboardViewModel>().loadDashboardData();
+          } else {
+            final phone = auth.currentUser?.celular ?? '';
+            if (phone.isNotEmpty) {
+              context.read<DashboardViewModel>().loadSellerDashboardData(phone);
+            }
+          }
         }
       });
     });
@@ -62,7 +71,7 @@ class _HomeShellViewState extends State<HomeShellView> {
       return [
         InventoryCatalogScreen(viewModel: context.read<InventoryViewModel>()),
         const PosSalesView(),
-        const DashboardOverviewView(),
+        const SellerDashboardView(),
       ];
     }
   }
@@ -247,7 +256,15 @@ class _HomeShellViewState extends State<HomeShellView> {
           } else if (index == 1 && context.mounted) {
             context.read<PosViewModel>().loadProducts();
           } else if (index == 2 && context.mounted) {
-            context.read<DashboardViewModel>().loadDashboardData();
+            final auth = context.read<AuthViewModel>();
+            if (auth.isAdmin) {
+              context.read<DashboardViewModel>().loadDashboardData();
+            } else {
+              final phone = auth.currentUser?.celular ?? '';
+              if (phone.isNotEmpty) {
+                context.read<DashboardViewModel>().loadSellerDashboardData(phone);
+              }
+            }
           } else if (index == 3 && isAdmin && context.mounted) {
             context.read<PromotersViewModel>().load();
           }

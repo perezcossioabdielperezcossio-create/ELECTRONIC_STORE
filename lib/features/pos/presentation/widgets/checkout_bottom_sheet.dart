@@ -590,7 +590,9 @@ class _CheckoutBottomSheetState extends State<CheckoutBottomSheet> {
                     onPressed: viewModel.isLoading || viewModel.violatesAntiLoss
                         ? null
                         : () async {
-                            final success = await viewModel.checkout();
+                            final auth = context.read<AuthViewModel?>();
+                            final activeUserPhone = auth?.currentUser?.celular;
+                            final success = await viewModel.checkout(usuarioId: activeUserPhone);
                             if (!context.mounted) return;
                             if (success) {
                               Navigator.of(context).pop();

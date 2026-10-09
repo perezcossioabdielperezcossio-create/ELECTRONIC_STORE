@@ -191,6 +191,7 @@ void main() async {
             getDailyCashAudit: getDailyCashAudit,
             getSalesByDate: getSalesByDate,
             syncManager: syncManager,
+            dashboardRepository: dashboardRepo,
           )..loadDashboardData(),
         ),
         ChangeNotifierProvider(

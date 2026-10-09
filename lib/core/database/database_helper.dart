@@ -48,6 +48,7 @@ class DatabaseHelper {
 
     await _createMissingTables(db);
     await _ensureLotsLocationColumn(db);
+    await _ensureVentasColumns(db);
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -55,11 +56,33 @@ class DatabaseHelper {
       await _createMissingTables(db);
     }
     await _ensureLotsLocationColumn(db);
+    await _ensureVentasColumns(db);
   }
 
   Future<void> _ensureLotsLocationColumn(DatabaseExecutor db) async {
     try {
       await db.execute("ALTER TABLE lots ADD COLUMN location TEXT NOT NULL DEFAULT 'ALMACEN';");
+    } catch (_) {}
+  }
+
+  Future<void> _ensureVentasColumns(DatabaseExecutor db) async {
+    try {
+      await db.execute("ALTER TABLE ventas ADD COLUMN usuario_id TEXT;");
+    } catch (_) {}
+    try {
+      await db.execute("ALTER TABLE ventas ADD COLUMN origen_venta TEXT DEFAULT 'ALMACEN';");
+    } catch (_) {}
+    try {
+      await db.execute("ALTER TABLE ventas ADD COLUMN store_location TEXT DEFAULT 'ALMACEN';");
+    } catch (_) {}
+    try {
+      await db.execute("ALTER TABLE sales ADD COLUMN usuario_id TEXT;");
+    } catch (_) {}
+    try {
+      await db.execute("ALTER TABLE sales ADD COLUMN origen_venta TEXT DEFAULT 'ALMACEN';");
+    } catch (_) {}
+    try {
+      await db.execute("ALTER TABLE sales ADD COLUMN store_location TEXT DEFAULT 'ALMACEN';");
     } catch (_) {}
   }
 

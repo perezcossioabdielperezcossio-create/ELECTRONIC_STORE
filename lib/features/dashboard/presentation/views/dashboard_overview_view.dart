@@ -17,7 +17,9 @@ class _DashboardOverviewViewState extends State<DashboardOverviewView> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<DashboardViewModel>().loadDashboardData();
+      final vm = context.read<DashboardViewModel>();
+      vm.loadSellers();
+      vm.loadDashboardData();
     });
   }
 
@@ -84,6 +86,10 @@ class _DashboardOverviewViewState extends State<DashboardOverviewView> {
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                // Selector de Ámbito / Filtro de Auditoría (Admin)
+                _buildAdminFilterSelector(context, vm),
+                const SizedBox(height: 12),
+
                 // Header con la fecha seleccionada
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -510,6 +516,90 @@ class _DashboardOverviewViewState extends State<DashboardOverviewView> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildAdminFilterSelector(BuildContext context, DashboardViewModel vm) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.filter_alt, size: 18, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 6),
+                const Text(
+                  'Ámbito de Auditoría & Control',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SegmentedButton<AdminDashboardFilter>(
+                segments: const [
+                  ButtonSegment(
+                    value: AdminDashboardFilter.almacenCentral,
+                    label: Text('Almacén Central'),
+                    icon: Icon(Icons.warehouse_outlined, size: 16),
+                  ),
+                  ButtonSegment(
+                    value: AdminDashboardFilter.consolidadoGeneral,
+                    label: Text('Consolidado'),
+                    icon: Icon(Icons.pie_chart_outline, size: 16),
+                  ),
+                  ButtonSegment(
+                    value: AdminDashboardFilter.porVendedor,
+                    label: Text('Por Vendedor'),
+                    icon: Icon(Icons.person_search_outlined, size: 16),
+                  ),
+                ],
+                selected: {vm.adminFilter},
+                onSelectionChanged: (newSelection) {
+                  vm.setAdminFilter(newSelection.first);
+                },
+              ),
+            ),
+            if (vm.adminFilter == AdminDashboardFilter.porVendedor) ...[
+              const SizedBox(height: 12),
+              if (vm.sellers.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 4.0),
+                  child: Text('No hay vendedores registrados.', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                )
+              else
+                DropdownButtonFormField<String>(
+                  initialValue: vm.sellers.any((s) => s.celular == vm.selectedSellerPhone)
+                      ? vm.selectedSellerPhone
+                      : (vm.sellers.isNotEmpty ? vm.sellers.first.celular : null),
+                  decoration: InputDecoration(
+                    labelText: 'Vendedor a auditar',
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    prefixIcon: const Icon(Icons.person, size: 20),
+                  ),
+                  items: vm.sellers.map((seller) {
+                    return DropdownMenuItem<String>(
+                      value: seller.celular,
+                      child: Text('${seller.nombre} (${seller.tiendaNombre})'),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    if (val != null) {
+                      vm.setSelectedSellerPhone(val);
+                    }
+                  },
+                ),
+            ],
+          ],
+        ),
       ),
     );
   }

@@ -77,6 +77,9 @@ CREATE TABLE IF NOT EXISTS ventas (
     customer_phone TEXT,
     promoter_id TEXT,
     notes TEXT,
+    store_location TEXT DEFAULT 'ALMACEN',
+    origen_venta TEXT DEFAULT 'ALMACEN',
+    usuario_id TEXT,
     FOREIGN KEY (cliente_id) REFERENCES clientes(id),
     FOREIGN KEY (delivery_id) REFERENCES deliveries(id),
     FOREIGN KEY (promoter_id) REFERENCES promoters(id)
@@ -118,6 +121,9 @@ CREATE TABLE IF NOT EXISTS sales (
     promoter_id TEXT,
     notes TEXT,
     is_locked INTEGER DEFAULT 0,
+    store_location TEXT DEFAULT 'ALMACEN',
+    origen_venta TEXT DEFAULT 'ALMACEN',
+    usuario_id TEXT,
     FOREIGN KEY (cliente_id) REFERENCES clientes(id),
     FOREIGN KEY (delivery_id) REFERENCES deliveries(id),
     FOREIGN KEY (promoter_id) REFERENCES promoters(id)

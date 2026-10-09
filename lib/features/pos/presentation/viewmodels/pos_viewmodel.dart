@@ -497,7 +497,7 @@ class PosViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> checkout({String? promoterId, String? storeLocation}) async {
+  Future<bool> checkout({String? promoterId, String? storeLocation, String? usuarioId}) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -526,6 +526,7 @@ class PosViewModel extends ChangeNotifier {
       customerPhone:  _selectedClient?.telefonoWhatsapp ?? _customerPhone,
       discount:       _globalDiscount,
       storeLocation:  targetLocation,
+      usuarioId:      usuarioId,
     );
 
     final result = await createSale(CreateSaleParams(sale));

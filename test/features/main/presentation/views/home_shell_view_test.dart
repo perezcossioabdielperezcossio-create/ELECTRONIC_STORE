@@ -71,6 +71,17 @@ void main() {
     when(() => mockDashboardVM.dailySales).thenReturn([]);
     when(() => mockDashboardVM.selectedDate).thenReturn(DateTime.now());
     when(() => mockDashboardVM.loadDashboardData()).thenAnswer((_) async {});
+    when(() => mockDashboardVM.loadSellers()).thenAnswer((_) async {});
+    when(() => mockDashboardVM.loadSellerDashboardData(any())).thenAnswer((_) async {});
+    when(() => mockDashboardVM.isSellerLoading).thenReturn(false);
+    when(() => mockDashboardVM.sellerErrorMessage).thenReturn(null);
+    when(() => mockDashboardVM.sellerArqueo).thenReturn(null);
+    when(() => mockDashboardVM.sellerSales).thenReturn([]);
+    when(() => mockDashboardVM.sellerVentasHoy).thenReturn(0.0);
+    when(() => mockDashboardVM.sellerVentasSemana).thenReturn(0.0);
+    when(() => mockDashboardVM.adminFilter).thenReturn(AdminDashboardFilter.almacenCentral);
+    when(() => mockDashboardVM.sellers).thenReturn([]);
+    when(() => mockDashboardVM.selectedSellerPhone).thenReturn(null);
 
     when(() => mockPromotersVM.isLoading).thenReturn(false);
     when(() => mockPromotersVM.error).thenReturn(null);

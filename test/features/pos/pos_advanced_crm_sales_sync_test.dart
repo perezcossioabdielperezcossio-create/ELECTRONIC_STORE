@@ -216,7 +216,10 @@ void main() {
                 promoter_id TEXT,
                 delivery_id TEXT,
                 delivery_name TEXT,
-                notes TEXT
+                notes TEXT,
+                usuario_id TEXT,
+                origen_venta TEXT DEFAULT 'ALMACEN',
+                store_location TEXT DEFAULT 'ALMACEN'
             );
           ''');
           await db.execute('''
@@ -254,7 +257,10 @@ void main() {
                 delivery_id TEXT,
                 delivery_name TEXT,
                 notes TEXT,
-                is_locked INTEGER DEFAULT 0
+                is_locked INTEGER DEFAULT 0,
+                usuario_id TEXT,
+                origen_venta TEXT DEFAULT 'ALMACEN',
+                store_location TEXT DEFAULT 'ALMACEN'
             );
           ''');
           await db.execute('''

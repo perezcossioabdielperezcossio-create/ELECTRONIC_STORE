@@ -20,16 +20,29 @@ class PosLocalDatasourceImpl implements PosLocalDatasource {
   final DatabaseHelper dbHelper;
   const PosLocalDatasourceImpl(this.dbHelper);
 
+  Future<void> _safeInsert(DatabaseExecutor txn, String table, Map<String, dynamic> map) async {
+    try {
+      await txn.insert(table, map, conflictAlgorithm: ConflictAlgorithm.replace);
+    } catch (_) {
+      try {
+        final tableInfo = await txn.rawQuery("PRAGMA table_info($table)");
+        final validCols = tableInfo.map((r) => r['name'] as String).toSet();
+        if (validCols.isNotEmpty) {
+          final filteredMap = Map<String, dynamic>.fromEntries(
+            map.entries.where((e) => validCols.contains(e.key)),
+          );
+          await txn.insert(table, filteredMap, conflictAlgorithm: ConflictAlgorithm.replace);
+        }
+      } catch (_) {}
+    }
+  }
+
   @override
   Future<void> saveSale(SaleModel model) async {
     final db = await dbHelper.database;
     await db.transaction((txn) async {
-      try {
-        await txn.insert('sales', model.toSqliteSalesMap(), conflictAlgorithm: ConflictAlgorithm.replace);
-      } catch (_) {}
-      try {
-        await txn.insert('ventas', model.toSqliteVentasMap(), conflictAlgorithm: ConflictAlgorithm.replace);
-      } catch (_) {}
+      await _safeInsert(txn, 'sales', model.toSqliteSalesMap());
+      await _safeInsert(txn, 'ventas', model.toSqliteVentasMap());
 
       await txn.insert('sync_queue', {
         'id': const Uuid().v4(),
@@ -58,10 +71,10 @@ class PosLocalDatasourceImpl implements PosLocalDatasource {
         String whereClause = 'product_id = ? AND current_quantity > 0 AND is_active = 1';
         final whereArgs = <dynamic>[item.productId];
 
-        final locUpper = model.storeLocation.toUpperCase().trim();
+        final locUpper = (model.origenVenta.isNotEmpty ? model.origenVenta : model.storeLocation).toUpperCase().trim();
         if (locUpper == 'TIENDA') {
           whereClause += " AND UPPER(COALESCE(location, 'ALMACEN')) = 'TIENDA'";
-        } else if (locUpper == 'ALMACEN') {
+        } else {
           whereClause += " AND UPPER(COALESCE(location, 'ALMACEN')) = 'ALMACEN'";
         }
 
@@ -167,12 +180,8 @@ class PosLocalDatasourceImpl implements PosLocalDatasource {
       }
 
       // Save sale in sales & ventas
-      try {
-        await txn.insert('sales', model.toSqliteSalesMap(), conflictAlgorithm: ConflictAlgorithm.replace);
-      } catch (_) {}
-      try {
-        await txn.insert('ventas', model.toSqliteVentasMap(), conflictAlgorithm: ConflictAlgorithm.replace);
-      } catch (_) {}
+      await _safeInsert(txn, 'sales', model.toSqliteSalesMap());
+      await _safeInsert(txn, 'ventas', model.toSqliteVentasMap());
 
       final fullSale = SaleModel(
         id: model.id,
@@ -193,6 +202,8 @@ class PosLocalDatasourceImpl implements PosLocalDatasource {
         customerName: model.customerName,
         customerPhone: model.customerPhone,
         isLocked: model.isLocked,
+        storeLocation: model.storeLocation,
+        usuarioId: model.usuarioId,
       );
 
       await txn.insert('sync_queue', {
