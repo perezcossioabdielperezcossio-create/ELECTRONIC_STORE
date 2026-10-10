@@ -325,50 +325,56 @@ void main() {
 
       // Insert seller's sale (TIENDA)
       final now = DateTime.now();
-      await db.insert('ventas', {
-        'id': 'sale_seller_1',
-        'total_cobrado': 350.0,
-        'metodo_pago': 'EFECTIVO',
-        'tipo_entrega': 'TIENDA',
-        'fecha_venta': now.toIso8601String(),
-        'created_at': now.toIso8601String(),
-        'payment_method': 'EFECTIVO',
-        'total': 350.0,
-        'status': 'completed',
-        'usuario_id': '77700011',
-        'origen_venta': 'TIENDA',
-        'store_location': 'TIENDA',
-      });
+      await tester.runAsync(() async {
+        await db.insert('ventas', {
+          'id': 'sale_seller_1',
+          'total_cobrado': 350.0,
+          'metodo_pago': 'EFECTIVO',
+          'tipo_entrega': 'TIENDA',
+          'fecha_venta': now.toIso8601String(),
+          'created_at': now.toIso8601String(),
+          'payment_method': 'EFECTIVO',
+          'total': 350.0,
+          'status': 'completed',
+          'usuario_id': '77700011',
+          'origen_venta': 'TIENDA',
+          'store_location': 'TIENDA',
+        });
 
-      await db.insert('sales', {
-        'id': 'sale_seller_1',
-        'total_cobrado': 350.0,
-        'metodo_pago': 'EFECTIVO',
-        'tipo_entrega': 'TIENDA',
-        'fecha_venta': now.toIso8601String(),
-        'created_at': now.toIso8601String(),
-        'payment_method': 'EFECTIVO',
-        'total': 350.0,
-        'status': 'completed',
-        'usuario_id': '77700011',
-        'origen_venta': 'TIENDA',
-        'store_location': 'TIENDA',
-      });
+        await db.insert('sales', {
+          'id': 'sale_seller_1',
+          'total_cobrado': 350.0,
+          'metodo_pago': 'EFECTIVO',
+          'tipo_entrega': 'TIENDA',
+          'delivery_method': 'TIENDA',
+          'fecha_venta': now.toIso8601String(),
+          'created_at': now.toIso8601String(),
+          'payment_method': 'EFECTIVO',
+          'total': 350.0,
+          'status': 'completed',
+          'usuario_id': '77700011',
+          'origen_venta': 'TIENDA',
+          'store_location': 'TIENDA',
+        });
 
-      // Insert another sale from warehouse (ALMACEN) - should not appear in seller dashboard
-      await db.insert('sales', {
-        'id': 'sale_admin_warehouse',
-        'total_cobrado': 2000.0,
-        'metodo_pago': 'QR',
-        'tipo_entrega': 'TIENDA',
-        'fecha_venta': now.toIso8601String(),
-        'created_at': now.toIso8601String(),
-        'payment_method': 'QR',
-        'total': 2000.0,
-        'status': 'completed',
-        'usuario_id': '70000000',
-        'origen_venta': 'ALMACEN',
-        'store_location': 'ALMACEN',
+        // Insert another sale from warehouse (ALMACEN) - should not appear in seller dashboard
+        await db.insert('sales', {
+          'id': 'sale_admin_warehouse',
+          'total_cobrado': 2000.0,
+          'metodo_pago': 'QR',
+          'tipo_entrega': 'TIENDA',
+          'delivery_method': 'TIENDA',
+          'fecha_venta': now.toIso8601String(),
+          'created_at': now.toIso8601String(),
+          'payment_method': 'QR',
+          'total': 2000.0,
+          'status': 'completed',
+          'usuario_id': '70000000',
+          'origen_venta': 'ALMACEN',
+          'store_location': 'ALMACEN',
+        });
+
+        await dashboardVm.loadSellerDashboardData('77700011');
       });
 
       await tester.pumpWidget(
@@ -383,9 +389,7 @@ void main() {
         ),
       );
 
-      await tester.pump(const Duration(milliseconds: 100));
-      await dashboardVm.loadSellerDashboardData('77700011');
-      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump();
 
       // Cards
       expect(find.text('Mi Dashboard'), findsOneWidget);
@@ -407,13 +411,16 @@ void main() {
 
   group('3. Admin Dashboard Audit Filtering', () {
     testWidgets('DashboardOverviewView renders filter segmented button and shows capital metrics', (tester) async {
-      await db.insert('usuarios', {
-        'celular': '77700011',
-        'nombre': 'Carlos Vendedor',
-        'pin': '123456',
-        'role': 'seller',
-        'tienda_nombre': 'Sucursal Central',
-        'activo': 1,
+      await tester.runAsync(() async {
+        await db.insert('usuarios', {
+          'celular': '77700011',
+          'nombre': 'Carlos Vendedor',
+          'pin': '123456',
+          'role': 'seller',
+          'tienda_nombre': 'Sucursal Central',
+          'activo': 1,
+        });
+        await dashboardVm.loadDashboardData();
       });
 
       await tester.pumpWidget(
@@ -425,9 +432,7 @@ void main() {
         ),
       );
 
-      await tester.pump(const Duration(milliseconds: 100));
-      await dashboardVm.loadDashboardData();
-      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump();
 
       // Header filter
       expect(find.text('Almacén Central'), findsOneWidget);
@@ -439,8 +444,11 @@ void main() {
       expect(find.text('Ganancia Neta Real'), findsOneWidget);
 
       // Switch to Por Vendedor
-      await tester.tap(find.text('Por Vendedor'));
-      await tester.pump(const Duration(milliseconds: 100));
+      await tester.runAsync(() async {
+        await tester.tap(find.text('Por Vendedor'));
+        await dashboardVm.setAdminFilter(AdminDashboardFilter.porVendedor);
+      });
+      await tester.pump();
 
       expect(dashboardVm.adminFilter, AdminDashboardFilter.porVendedor);
     });

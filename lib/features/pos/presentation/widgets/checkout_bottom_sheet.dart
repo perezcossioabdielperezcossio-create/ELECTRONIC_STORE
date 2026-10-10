@@ -5,6 +5,8 @@ import '../viewmodels/pos_viewmodel.dart';
 import '../../../clients/domain/entities/client.dart';
 import '../../../deliveries/domain/entities/delivery.dart';
 import '../../../deliveries/presentation/widgets/delivery_management_dialog.dart';
+import '../../../dashboard/presentation/viewmodels/dashboard_viewmodel.dart';
+import '../../../inventory/presentation/viewmodels/inventory_viewmodel.dart';
 
 class CheckoutBottomSheet extends StatefulWidget {
   const CheckoutBottomSheet({super.key});
@@ -595,6 +597,21 @@ class _CheckoutBottomSheetState extends State<CheckoutBottomSheet> {
                             final success = await viewModel.checkout(usuarioId: activeUserPhone);
                             if (!context.mounted) return;
                             if (success) {
+                              try {
+                                final dashboardVm = context.read<DashboardViewModel?>();
+                                if (dashboardVm != null) {
+                                  dashboardVm.loadAuditForDate(
+                                    dashboardVm.selectedDate,
+                                    sellerUsuarioId: activeUserPhone,
+                                  );
+                                }
+                              } catch (_) {}
+                              try {
+                                final inventoryVm = context.read<InventoryViewModel?>();
+                                if (inventoryVm != null) {
+                                  inventoryVm.loadProducts();
+                                }
+                              } catch (_) {}
                               Navigator.of(context).pop();
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(

@@ -11,7 +11,11 @@ class ProcessSaleUseCase implements UseCase<Unit, ProcessSaleParams> {
 
   @override
   Future<Either<Failure, Unit>> call(ProcessSaleParams params) async {
-    return await repository.processSale(params.sale);
+    final finalizedSale = params.sale.copyWith(
+      status: SaleStatus.completed,
+      isLocked: true,
+    );
+    return await repository.processSale(finalizedSale);
   }
 }
 

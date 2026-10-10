@@ -10,8 +10,13 @@ class CreateSale implements UseCase<Unit, CreateSaleParams> {
   const CreateSale(this.repository);
 
   @override
-  Future<Either<Failure, Unit>> call(CreateSaleParams params) =>
-      repository.processSale(params.sale);
+  Future<Either<Failure, Unit>> call(CreateSaleParams params) {
+    final finalizedSale = params.sale.copyWith(
+      status: SaleStatus.completed,
+      isLocked: true,
+    );
+    return repository.processSale(finalizedSale);
+  }
 }
 
 class CreateSaleParams extends Equatable {

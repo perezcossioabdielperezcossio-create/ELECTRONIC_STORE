@@ -43,10 +43,11 @@ class SaleModel extends Sale {
     SaleStatus parsedStatus = SaleStatus.completed;
     final rawStatus = map['status'] as String?;
     if (rawStatus != null) {
-      try {
-        parsedStatus = SaleStatus.values.byName(rawStatus);
-      } catch (_) {
-        parsedStatus = rawStatus.toLowerCase() == 'voided' ? SaleStatus.voided : SaleStatus.completed;
+      final s = rawStatus.toLowerCase().trim();
+      if (s == 'voided' || s == 'anulada') {
+        parsedStatus = SaleStatus.voided;
+      } else {
+        parsedStatus = SaleStatus.completed;
       }
     }
 
@@ -146,14 +147,14 @@ class SaleModel extends Sale {
         'metodo_pago': paymentMethod,
         'tipo_entrega': deliveryMethod,
         'fecha_venta': createdAt.toIso8601String(),
-        'is_locked': isLocked ? 1 : 0,
+        'is_locked': isLocked,
         'created_at': createdAt.toIso8601String(),
         'payment_method': paymentMethod,
         'delivery_method': deliveryMethod,
         'delivery_fee': deliveryFee,
         'discount': discount,
         'tax': tax,
-        'status': status.name,
+        'status': status == SaleStatus.voided ? 'VOIDED' : 'COMPLETED',
         'customer_name': customerName,
         'customer_phone': customerPhone,
         'promoter_id': promoterId,
@@ -213,7 +214,7 @@ class SaleModel extends Sale {
         'metodo_pago': paymentMethod,
         'tipo_entrega': deliveryMethod,
         'fecha_venta': createdAt.toIso8601String(),
-        'is_locked': isLocked ? 1 : 0,
+        'is_locked': 1,
         'created_at': createdAt.toIso8601String(),
         'payment_method': paymentMethod,
         'delivery_method': deliveryMethod,
@@ -221,7 +222,7 @@ class SaleModel extends Sale {
         'discount': discount,
         'tax': tax,
         'total': total,
-        'status': status.name,
+        'status': status == SaleStatus.voided ? 'VOIDED' : 'COMPLETED',
         'customer_name': customerName,
         'customer_phone': customerPhone,
         'promoter_id': promoterId,
@@ -247,12 +248,12 @@ class SaleModel extends Sale {
         'discount': discount,
         'tax': tax,
         'total': total,
-        'status': status.name,
+        'status': status == SaleStatus.voided ? 'VOIDED' : 'COMPLETED',
         'customer_name': customerName,
         'customer_phone': customerPhone,
         'promoter_id': promoterId,
         'notes': notes,
-        'is_locked': isLocked ? 1 : 0,
+        'is_locked': 1,
         'store_location': storeLocation,
         'origen_venta': storeLocation,
         'usuario_id': usuarioId,

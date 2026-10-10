@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../../../../core/database/database_helper.dart';
 import '../models/sale_model.dart';
 import '../models/sale_detail_model.dart';
+import '../../domain/entities/sale.dart';
 import '../../domain/entities/sale_item.dart';
 import '../../domain/entities/sale_detail.dart';
 import '../../../../core/errors/exceptions.dart';
@@ -180,8 +181,16 @@ class PosLocalDatasourceImpl implements PosLocalDatasource {
       }
 
       // Save sale in sales & ventas
-      await _safeInsert(txn, 'sales', model.toSqliteSalesMap());
-      await _safeInsert(txn, 'ventas', model.toSqliteVentasMap());
+      final salesMap = Map<String, dynamic>.from(model.toSqliteSalesMap());
+      salesMap['status'] = model.status == SaleStatus.voided ? 'VOIDED' : 'COMPLETED';
+      salesMap['is_locked'] = 1;
+
+      final ventasMap = Map<String, dynamic>.from(model.toSqliteVentasMap());
+      ventasMap['status'] = model.status == SaleStatus.voided ? 'VOIDED' : 'COMPLETED';
+      ventasMap['is_locked'] = 1;
+
+      await _safeInsert(txn, 'sales', salesMap);
+      await _safeInsert(txn, 'ventas', ventasMap);
 
       final fullSale = SaleModel(
         id: model.id,
@@ -193,7 +202,7 @@ class PosLocalDatasourceImpl implements PosLocalDatasource {
         createdAt: model.createdAt,
         discount: model.discount,
         tax: model.tax,
-        status: model.status,
+        status: model.status == SaleStatus.voided ? SaleStatus.voided : SaleStatus.completed,
         promoterId: model.promoterId,
         notes: model.notes,
         paymentMethod: model.paymentMethod,
@@ -201,16 +210,20 @@ class PosLocalDatasourceImpl implements PosLocalDatasource {
         deliveryFee: model.deliveryFee,
         customerName: model.customerName,
         customerPhone: model.customerPhone,
-        isLocked: model.isLocked,
+        isLocked: true,
         storeLocation: model.storeLocation,
         usuarioId: model.usuarioId,
       );
+
+      final payloadMap = fullSale.toMap();
+      payloadMap['status'] = fullSale.status == SaleStatus.voided ? 'VOIDED' : 'COMPLETED';
+      payloadMap['is_locked'] = true;
 
       await txn.insert('sync_queue', {
         'id': const Uuid().v4(),
         'table_name': 'sales',
         'operation': 'CREATE',
-        'payload': jsonEncode(fullSale.toMap()),
+        'payload': jsonEncode(payloadMap),
         'created_at': DateTime.now().toUtc().toIso8601String(),
         'status': 'PENDING',
         'retry_count': 0,
@@ -261,17 +274,15 @@ class PosLocalDatasourceImpl implements PosLocalDatasource {
   @override
   Future<List<SaleModel>> getSalesByDate(DateTime date) async {
     final db = await dbHelper.database;
-    final start = DateTime(date.year, date.month, date.day);
-    final end = start.add(const Duration(days: 1));
-    final startStr = start.toIso8601String();
-    final endStr = end.toIso8601String();
+    final dateStr = date.toIso8601String().substring(0, 10);
+    const dateWhere = "(substr(COALESCE(fecha_venta, created_at), 1, 10) = ? OR date(COALESCE(fecha_venta, created_at)) = date(?)) AND (UPPER(COALESCE(status, 'COMPLETED')) != 'VOIDED' AND UPPER(COALESCE(status, 'COMPLETED')) != 'ANULADA')";
 
     List<Map<String, dynamic>> maps = [];
     try {
       maps = await db.query(
         'ventas',
-        where: 'fecha_venta >= ? AND fecha_venta < ?',
-        whereArgs: [startStr, endStr],
+        where: dateWhere,
+        whereArgs: [dateStr, dateStr],
         orderBy: 'fecha_venta DESC',
       );
     } catch (_) {}
@@ -280,8 +291,8 @@ class PosLocalDatasourceImpl implements PosLocalDatasource {
       try {
         maps = await db.query(
           'sales',
-          where: 'created_at >= ? AND created_at < ?',
-          whereArgs: [startStr, endStr],
+          where: dateWhere,
+          whereArgs: [dateStr, dateStr],
           orderBy: 'created_at DESC',
         );
       } catch (_) {}

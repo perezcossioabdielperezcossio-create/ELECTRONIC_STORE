@@ -79,7 +79,24 @@ class ProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthViewModel?>();
-    final bool isAdmin = auth?.currentUser?.role == UserRole.admin;
+    bool isSeller = false;
+    bool isAdmin = true;
+    try {
+      if (auth?.currentUser != null) {
+        isSeller = auth!.currentUser!.role == UserRole.seller;
+        isAdmin = auth.currentUser!.role == UserRole.admin;
+      } else if (auth != null) {
+        try {
+          isSeller = auth.isSeller;
+        } catch (_) {}
+        try {
+          isAdmin = auth.isAdmin;
+        } catch (_) {}
+        if (isSeller) {
+          isAdmin = false;
+        }
+      }
+    } catch (_) {}
 
     final visibleLots = isAdmin 
         ? product.lots.where((l) => l.isActive).toList()

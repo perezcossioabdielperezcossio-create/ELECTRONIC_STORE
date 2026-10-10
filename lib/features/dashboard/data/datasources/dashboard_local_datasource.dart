@@ -1,3 +1,4 @@
+import 'package:sqflite/sqflite.dart';
 import '../../../../core/database/database_helper.dart';
 import '../../../auth/domain/entities/user.dart';
 import '../../../pos/data/models/sale_model.dart';
@@ -50,6 +51,15 @@ class DashboardLocalDatasourceImpl implements DashboardLocalDatasource {
     return const BalancePatrimonial(capitalInmovilizado: 0, gananciaPotencial: 0);
   }
 
+  Future<Set<String>> _getTableColumns(Database db, String tableName) async {
+    try {
+      final info = await db.rawQuery('PRAGMA table_info($tableName)');
+      return info.map((r) => (r['name'] as String).toLowerCase()).toSet();
+    } catch (_) {
+      return <String>{};
+    }
+  }
+
   @override
   Future<ArqueoDiario> getArqueoDiario({DateTime? date, String? usuarioId, String? origenVenta}) async {
     final db = await dbHelper.database;
@@ -57,56 +67,123 @@ class DashboardLocalDatasourceImpl implements DashboardLocalDatasource {
     final dateString = targetDate.toIso8601String().substring(0, 10);
 
     List<Map<String, dynamic>> desgloseResult = [];
-    try {
-      final whereConditions = ["DATE(s.created_at) = ?"];
-      final args = <dynamic>[dateString];
-
-      if (usuarioId != null && usuarioId.isNotEmpty) {
-        whereConditions.add("s.usuario_id = ?");
-        args.add(usuarioId);
-      }
-      if (origenVenta != null && origenVenta.isNotEmpty) {
-        whereConditions.add("UPPER(COALESCE(s.origen_venta, s.store_location, 'ALMACEN')) = UPPER(?)");
-        args.add(origenVenta);
-      }
-
-      desgloseResult = await db.rawQuery('''
-        SELECT 
-          s.payment_method as payment_method,
-          SUM(s.total) as ingreso_bruto,
-          SUM(COALESCE(si.quantity * si.unit_cost, 0)) as capital_base_recuperado
-        FROM sales s
-        LEFT JOIN sale_items si ON s.id = si.sale_id
-        WHERE ${whereConditions.join(" AND ")}
-        GROUP BY s.payment_method
-      ''', args);
-    } catch (_) {}
-
-    if (desgloseResult.isEmpty) {
+    final salesCols = await _getTableColumns(db, 'sales');
+    if (salesCols.isNotEmpty) {
       try {
-        final whereConditions = ["DATE(s.fecha_venta) = ?"];
-        final args = <dynamic>[dateString];
+        final whereConditions = <String>[];
+        final args = <dynamic>[];
+
+        if (salesCols.contains('created_at') && salesCols.contains('fecha_venta')) {
+          whereConditions.add("(substr(COALESCE(s.fecha_venta, s.created_at), 1, 10) = ? OR date(COALESCE(s.fecha_venta, s.created_at)) = date(?))");
+          args.addAll([dateString, dateString]);
+        } else if (salesCols.contains('fecha_venta')) {
+          whereConditions.add("(substr(s.fecha_venta, 1, 10) = ? OR date(s.fecha_venta) = date(?))");
+          args.addAll([dateString, dateString]);
+        } else if (salesCols.contains('created_at')) {
+          whereConditions.add("(substr(s.created_at, 1, 10) = ? OR date(s.created_at) = date(?))");
+          args.addAll([dateString, dateString]);
+        }
+
+        if (salesCols.contains('status')) {
+          whereConditions.add("(UPPER(COALESCE(s.status, 'COMPLETED')) != 'VOIDED' AND UPPER(COALESCE(s.status, 'COMPLETED')) != 'ANULADA')");
+        }
 
         if (usuarioId != null && usuarioId.isNotEmpty) {
-          whereConditions.add("s.usuario_id = ?");
-          args.add(usuarioId);
+          if (salesCols.contains('usuario_id')) {
+            whereConditions.add("s.usuario_id = ?");
+            args.add(usuarioId);
+          } else if (salesCols.contains('promoter_id')) {
+            whereConditions.add("s.promoter_id = ?");
+            args.add(usuarioId);
+          }
         }
+
         if (origenVenta != null && origenVenta.isNotEmpty) {
-          whereConditions.add("UPPER(COALESCE(s.origen_venta, 'ALMACEN')) = UPPER(?)");
-          args.add(origenVenta);
+          if (salesCols.contains('origen_venta') && salesCols.contains('store_location')) {
+            whereConditions.add("UPPER(COALESCE(s.origen_venta, s.store_location, 'ALMACEN')) = UPPER(?)");
+            args.add(origenVenta);
+          } else if (salesCols.contains('origen_venta')) {
+            whereConditions.add("UPPER(COALESCE(s.origen_venta, 'ALMACEN')) = UPPER(?)");
+            args.add(origenVenta);
+          } else if (salesCols.contains('store_location')) {
+            whereConditions.add("UPPER(COALESCE(s.store_location, 'ALMACEN')) = UPPER(?)");
+            args.add(origenVenta);
+          }
         }
+
+        final whereClause = whereConditions.isNotEmpty ? "WHERE ${whereConditions.join(" AND ")}" : "";
+        final paymentCol = salesCols.contains('payment_method') ? 's.payment_method' : (salesCols.contains('metodo_pago') ? 's.metodo_pago' : "'EFECTIVO'");
+        final totalCol = salesCols.contains('total') ? 's.total' : (salesCols.contains('total_cobrado') ? 's.total_cobrado' : '0');
 
         desgloseResult = await db.rawQuery('''
           SELECT 
-            s.metodo_pago as payment_method,
-            SUM(s.total_cobrado) as ingreso_bruto,
-            SUM(COALESCE(dv.cantidad * dv.costo_unitario_compra, 0)) as capital_base_recuperado
-          FROM ventas s
-          LEFT JOIN detalle_ventas dv ON s.id = dv.venta_id
-          WHERE ${whereConditions.join(" AND ")}
-          GROUP BY s.metodo_pago
+            $paymentCol as payment_method,
+            SUM($totalCol) as ingreso_bruto,
+            SUM(COALESCE(items_cost.total_cost, 0)) as capital_base_recuperado
+          FROM sales s
+          LEFT JOIN (
+            SELECT sale_id, SUM(quantity * unit_cost) as total_cost
+            FROM sale_items
+            GROUP BY sale_id
+          ) items_cost ON s.id = items_cost.sale_id
+          $whereClause
+          GROUP BY $paymentCol
         ''', args);
       } catch (_) {}
+    }
+
+    if (desgloseResult.isEmpty) {
+      final ventasCols = await _getTableColumns(db, 'ventas');
+      if (ventasCols.isNotEmpty) {
+        try {
+          final whereConditions = <String>[];
+          final args = <dynamic>[];
+
+          if (ventasCols.contains('fecha_venta') && ventasCols.contains('created_at')) {
+            whereConditions.add("(substr(COALESCE(s.fecha_venta, s.created_at), 1, 10) = ? OR date(COALESCE(s.fecha_venta, s.created_at)) = date(?))");
+            args.addAll([dateString, dateString]);
+          } else if (ventasCols.contains('fecha_venta')) {
+            whereConditions.add("(substr(s.fecha_venta, 1, 10) = ? OR date(s.fecha_venta) = date(?))");
+            args.addAll([dateString, dateString]);
+          } else if (ventasCols.contains('created_at')) {
+            whereConditions.add("(substr(s.created_at, 1, 10) = ? OR date(s.created_at) = date(?))");
+            args.addAll([dateString, dateString]);
+          }
+
+          if (ventasCols.contains('status')) {
+            whereConditions.add("(UPPER(COALESCE(s.status, 'COMPLETED')) != 'VOIDED' AND UPPER(COALESCE(s.status, 'COMPLETED')) != 'ANULADA')");
+          }
+
+          if (usuarioId != null && usuarioId.isNotEmpty && ventasCols.contains('usuario_id')) {
+            whereConditions.add("s.usuario_id = ?");
+            args.add(usuarioId);
+          }
+
+          if (origenVenta != null && origenVenta.isNotEmpty && ventasCols.contains('origen_venta')) {
+            whereConditions.add("UPPER(COALESCE(s.origen_venta, 'ALMACEN')) = UPPER(?)");
+            args.add(origenVenta);
+          }
+
+          final whereClause = whereConditions.isNotEmpty ? "WHERE ${whereConditions.join(" AND ")}" : "";
+          final paymentCol = ventasCols.contains('metodo_pago') ? 's.metodo_pago' : (ventasCols.contains('payment_method') ? 's.payment_method' : "'EFECTIVO'");
+          final totalCol = ventasCols.contains('total_cobrado') ? 's.total_cobrado' : (ventasCols.contains('total') ? 's.total' : '0');
+
+          desgloseResult = await db.rawQuery('''
+            SELECT 
+              $paymentCol as payment_method,
+              SUM($totalCol) as ingreso_bruto,
+              SUM(COALESCE(dv_cost.total_cost, 0)) as capital_base_recuperado
+            FROM ventas s
+            LEFT JOIN (
+              SELECT venta_id, SUM(cantidad * costo_unitario_compra) as total_cost
+              FROM detalle_ventas
+              GROUP BY venta_id
+            ) dv_cost ON s.id = dv_cost.venta_id
+            $whereClause
+            GROUP BY $paymentCol
+          ''', args);
+        } catch (_) {}
+      }
     }
 
     List<DesgloseMetodoPago> desglose = [];
@@ -141,56 +218,105 @@ class DashboardLocalDatasourceImpl implements DashboardLocalDatasource {
     final db = await dbHelper.database;
     final targetDate = date ?? DateTime.now();
     final monday = targetDate.subtract(Duration(days: targetDate.weekday - 1));
-    final startOfWeek = DateTime(monday.year, monday.month, monday.day).toIso8601String();
-    final endOfWeek = DateTime(monday.year, monday.month, monday.day).add(const Duration(days: 7)).toIso8601String();
+    final startOfWeek = DateTime(monday.year, monday.month, monday.day).toIso8601String().substring(0, 10);
+    final endOfWeek = DateTime(monday.year, monday.month, monday.day).add(const Duration(days: 6)).toIso8601String().substring(0, 10);
 
     double total = 0.0;
-    try {
-      final whereConditions = ["created_at >= ?", "created_at < ?"];
-      final args = <dynamic>[startOfWeek, endOfWeek];
-
-      if (usuarioId != null && usuarioId.isNotEmpty) {
-        whereConditions.add("usuario_id = ?");
-        args.add(usuarioId);
-      }
-      if (origenVenta != null && origenVenta.isNotEmpty) {
-        whereConditions.add("UPPER(COALESCE(origen_venta, store_location, 'ALMACEN')) = UPPER(?)");
-        args.add(origenVenta);
-      }
-
-      final res = await db.rawQuery('''
-        SELECT SUM(total) as total_semana
-        FROM sales
-        WHERE ${whereConditions.join(" AND ")}
-      ''', args);
-      if (res.isNotEmpty && res.first['total_semana'] != null) {
-        total = ((res.first['total_semana'] as num?) ?? 0.0).toDouble();
-      }
-    } catch (_) {}
-
-    if (total == 0.0) {
+    final salesCols = await _getTableColumns(db, 'sales');
+    if (salesCols.isNotEmpty) {
       try {
-        final whereConditions = ["fecha_venta >= ?", "fecha_venta < ?"];
-        final args = <dynamic>[startOfWeek, endOfWeek];
+        final whereConditions = <String>[];
+        final args = <dynamic>[];
+
+        final dateCol = salesCols.contains('created_at') ? 'created_at' : (salesCols.contains('fecha_venta') ? 'fecha_venta' : null);
+        if (dateCol != null) {
+          whereConditions.add("substr($dateCol, 1, 10) >= ?");
+          whereConditions.add("substr($dateCol, 1, 10) <= ?");
+          args.addAll([startOfWeek, endOfWeek]);
+        }
+
+        if (salesCols.contains('status')) {
+          whereConditions.add("(UPPER(COALESCE(status, 'COMPLETED')) != 'VOIDED' AND UPPER(COALESCE(status, 'COMPLETED')) != 'ANULADA')");
+        }
 
         if (usuarioId != null && usuarioId.isNotEmpty) {
-          whereConditions.add("usuario_id = ?");
-          args.add(usuarioId);
-        }
-        if (origenVenta != null && origenVenta.isNotEmpty) {
-          whereConditions.add("UPPER(COALESCE(origen_venta, 'ALMACEN')) = UPPER(?)");
-          args.add(origenVenta);
+          if (salesCols.contains('usuario_id')) {
+            whereConditions.add("usuario_id = ?");
+            args.add(usuarioId);
+          } else if (salesCols.contains('promoter_id')) {
+            whereConditions.add("promoter_id = ?");
+            args.add(usuarioId);
+          }
         }
 
+        if (origenVenta != null && origenVenta.isNotEmpty) {
+          if (salesCols.contains('origen_venta') && salesCols.contains('store_location')) {
+            whereConditions.add("UPPER(COALESCE(origen_venta, store_location, 'ALMACEN')) = UPPER(?)");
+            args.add(origenVenta);
+          } else if (salesCols.contains('origen_venta')) {
+            whereConditions.add("UPPER(COALESCE(origen_venta, 'ALMACEN')) = UPPER(?)");
+            args.add(origenVenta);
+          } else if (salesCols.contains('store_location')) {
+            whereConditions.add("UPPER(COALESCE(store_location, 'ALMACEN')) = UPPER(?)");
+            args.add(origenVenta);
+          }
+        }
+
+        final whereClause = whereConditions.isNotEmpty ? "WHERE ${whereConditions.join(" AND ")}" : "";
+        final totalCol = salesCols.contains('total') ? 'total' : (salesCols.contains('total_cobrado') ? 'total_cobrado' : '0');
+
         final res = await db.rawQuery('''
-          SELECT SUM(total_cobrado) as total_semana
-          FROM ventas
-          WHERE ${whereConditions.join(" AND ")}
+          SELECT SUM($totalCol) as total_semana
+          FROM sales
+          $whereClause
         ''', args);
         if (res.isNotEmpty && res.first['total_semana'] != null) {
           total = ((res.first['total_semana'] as num?) ?? 0.0).toDouble();
         }
       } catch (_) {}
+    }
+
+    if (total == 0.0) {
+      final ventasCols = await _getTableColumns(db, 'ventas');
+      if (ventasCols.isNotEmpty) {
+        try {
+          final whereConditions = <String>[];
+          final args = <dynamic>[];
+
+          final dateCol = ventasCols.contains('fecha_venta') ? 'fecha_venta' : (ventasCols.contains('created_at') ? 'created_at' : null);
+          if (dateCol != null) {
+            whereConditions.add("substr($dateCol, 1, 10) >= ?");
+            whereConditions.add("substr($dateCol, 1, 10) <= ?");
+            args.addAll([startOfWeek, endOfWeek]);
+          }
+
+          if (ventasCols.contains('status')) {
+            whereConditions.add("(UPPER(COALESCE(status, 'COMPLETED')) != 'VOIDED' AND UPPER(COALESCE(status, 'COMPLETED')) != 'ANULADA')");
+          }
+
+          if (usuarioId != null && usuarioId.isNotEmpty && ventasCols.contains('usuario_id')) {
+            whereConditions.add("usuario_id = ?");
+            args.add(usuarioId);
+          }
+
+          if (origenVenta != null && origenVenta.isNotEmpty && ventasCols.contains('origen_venta')) {
+            whereConditions.add("UPPER(COALESCE(origen_venta, 'ALMACEN')) = UPPER(?)");
+            args.add(origenVenta);
+          }
+
+          final whereClause = whereConditions.isNotEmpty ? "WHERE ${whereConditions.join(" AND ")}" : "";
+          final totalCol = ventasCols.contains('total_cobrado') ? 'total_cobrado' : (ventasCols.contains('total') ? 'total' : '0');
+
+          final res = await db.rawQuery('''
+            SELECT SUM($totalCol) as total_semana
+            FROM ventas
+            $whereClause
+          ''', args);
+          if (res.isNotEmpty && res.first['total_semana'] != null) {
+            total = ((res.first['total_semana'] as num?) ?? 0.0).toDouble();
+          }
+        } catch (_) {}
+      }
     }
 
     return total;
@@ -201,60 +327,111 @@ class DashboardLocalDatasourceImpl implements DashboardLocalDatasource {
     final db = await dbHelper.database;
     List<Map<String, dynamic>> maps = [];
 
-    try {
-      final whereConditions = <String>[];
-      final args = <dynamic>[];
-
-      if (date != null) {
-        whereConditions.add("DATE(created_at) = ?");
-        args.add(date.toIso8601String().substring(0, 10));
-      }
-      if (usuarioId != null && usuarioId.isNotEmpty) {
-        whereConditions.add("usuario_id = ?");
-        args.add(usuarioId);
-      }
-      if (origenVenta != null && origenVenta.isNotEmpty) {
-        whereConditions.add("UPPER(COALESCE(origen_venta, store_location, 'ALMACEN')) = UPPER(?)");
-        args.add(origenVenta);
-      }
-
-      final whereStr = whereConditions.isNotEmpty ? whereConditions.join(" AND ") : null;
-      maps = await db.query(
-        'sales',
-        where: whereStr,
-        whereArgs: args.isNotEmpty ? args : null,
-        orderBy: 'created_at DESC',
-        limit: limit,
-      );
-    } catch (_) {}
-
-    if (maps.isEmpty) {
+    final salesCols = await _getTableColumns(db, 'sales');
+    if (salesCols.isNotEmpty) {
       try {
         final whereConditions = <String>[];
         final args = <dynamic>[];
 
         if (date != null) {
-          whereConditions.add("DATE(fecha_venta) = ?");
-          args.add(date.toIso8601String().substring(0, 10));
+          final dStr = date.toIso8601String().substring(0, 10);
+          if (salesCols.contains('created_at') && salesCols.contains('fecha_venta')) {
+            whereConditions.add("(substr(COALESCE(created_at, fecha_venta), 1, 10) = ? OR date(COALESCE(created_at, fecha_venta)) = date(?))");
+            args.addAll([dStr, dStr]);
+          } else if (salesCols.contains('created_at')) {
+            whereConditions.add("(substr(created_at, 1, 10) = ? OR date(created_at) = date(?))");
+            args.addAll([dStr, dStr]);
+          } else if (salesCols.contains('fecha_venta')) {
+            whereConditions.add("(substr(fecha_venta, 1, 10) = ? OR date(fecha_venta) = date(?))");
+            args.addAll([dStr, dStr]);
+          }
         }
+
+        if (salesCols.contains('status')) {
+          whereConditions.add("(UPPER(COALESCE(status, 'COMPLETED')) != 'VOIDED' AND UPPER(COALESCE(status, 'COMPLETED')) != 'ANULADA')");
+        }
+
         if (usuarioId != null && usuarioId.isNotEmpty) {
-          whereConditions.add("usuario_id = ?");
-          args.add(usuarioId);
+          if (salesCols.contains('usuario_id')) {
+            whereConditions.add("usuario_id = ?");
+            args.add(usuarioId);
+          } else if (salesCols.contains('promoter_id')) {
+            whereConditions.add("promoter_id = ?");
+            args.add(usuarioId);
+          }
         }
+
         if (origenVenta != null && origenVenta.isNotEmpty) {
-          whereConditions.add("UPPER(COALESCE(origen_venta, 'ALMACEN')) = UPPER(?)");
-          args.add(origenVenta);
+          if (salesCols.contains('origen_venta') && salesCols.contains('store_location')) {
+            whereConditions.add("UPPER(COALESCE(origen_venta, store_location, 'ALMACEN')) = UPPER(?)");
+            args.add(origenVenta);
+          } else if (salesCols.contains('origen_venta')) {
+            whereConditions.add("UPPER(COALESCE(origen_venta, 'ALMACEN')) = UPPER(?)");
+            args.add(origenVenta);
+          } else if (salesCols.contains('store_location')) {
+            whereConditions.add("UPPER(COALESCE(store_location, 'ALMACEN')) = UPPER(?)");
+            args.add(origenVenta);
+          }
         }
 
         final whereStr = whereConditions.isNotEmpty ? whereConditions.join(" AND ") : null;
+        final orderByCol = salesCols.contains('created_at') ? 'created_at DESC' : (salesCols.contains('fecha_venta') ? 'fecha_venta DESC' : null);
         maps = await db.query(
-          'ventas',
+          'sales',
           where: whereStr,
           whereArgs: args.isNotEmpty ? args : null,
-          orderBy: 'fecha_venta DESC',
+          orderBy: orderByCol,
           limit: limit,
         );
       } catch (_) {}
+    }
+
+    if (maps.isEmpty) {
+      final ventasCols = await _getTableColumns(db, 'ventas');
+      if (ventasCols.isNotEmpty) {
+        try {
+          final whereConditions = <String>[];
+          final args = <dynamic>[];
+
+          if (date != null) {
+            final dStr = date.toIso8601String().substring(0, 10);
+            if (ventasCols.contains('fecha_venta') && ventasCols.contains('created_at')) {
+              whereConditions.add("(substr(COALESCE(fecha_venta, created_at), 1, 10) = ? OR date(COALESCE(fecha_venta, created_at)) = date(?))");
+              args.addAll([dStr, dStr]);
+            } else if (ventasCols.contains('fecha_venta')) {
+              whereConditions.add("(substr(fecha_venta, 1, 10) = ? OR date(fecha_venta) = date(?))");
+              args.addAll([dStr, dStr]);
+            } else if (ventasCols.contains('created_at')) {
+              whereConditions.add("(substr(created_at, 1, 10) = ? OR date(created_at) = date(?))");
+              args.addAll([dStr, dStr]);
+            }
+          }
+
+          if (ventasCols.contains('status')) {
+            whereConditions.add("(UPPER(COALESCE(status, 'COMPLETED')) != 'VOIDED' AND UPPER(COALESCE(status, 'COMPLETED')) != 'ANULADA')");
+          }
+
+          if (usuarioId != null && usuarioId.isNotEmpty && ventasCols.contains('usuario_id')) {
+            whereConditions.add("usuario_id = ?");
+            args.add(usuarioId);
+          }
+
+          if (origenVenta != null && origenVenta.isNotEmpty && ventasCols.contains('origen_venta')) {
+            whereConditions.add("UPPER(COALESCE(origen_venta, 'ALMACEN')) = UPPER(?)");
+            args.add(origenVenta);
+          }
+
+          final whereStr = whereConditions.isNotEmpty ? whereConditions.join(" AND ") : null;
+          final orderByCol = ventasCols.contains('fecha_venta') ? 'fecha_venta DESC' : (ventasCols.contains('created_at') ? 'created_at DESC' : null);
+          maps = await db.query(
+            'ventas',
+            where: whereStr,
+            whereArgs: args.isNotEmpty ? args : null,
+            orderBy: orderByCol,
+            limit: limit,
+          );
+        } catch (_) {}
+      }
     }
 
     final sales = <SaleModel>[];

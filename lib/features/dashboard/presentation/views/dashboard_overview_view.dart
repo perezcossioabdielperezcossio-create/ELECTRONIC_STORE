@@ -50,7 +50,10 @@ class _DashboardOverviewViewState extends State<DashboardOverviewView> {
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Actualizar',
-            onPressed: () => context.read<DashboardViewModel>().loadDashboardData(),
+            onPressed: () async {
+              final vm = context.read<DashboardViewModel>();
+              await vm.loadAuditForDate(vm.selectedDate);
+            },
           ),
         ],
       ),

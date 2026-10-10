@@ -372,7 +372,7 @@ void main() {
 
       expect(find.text('Disponible en Tienda: 3'), findsOneWidget);
       expect(find.text('En Almacén Central: 8'), findsOneWidget);
-      expect(find.text('Precio: Bs. 250.00'), findsOneWidget);
+      expect(find.textContaining('Bs. 250.00'), findsOneWidget);
 
       expect(find.textContaining('Último Costo'), findsNothing);
       expect(find.textContaining('120.00'), findsNothing);

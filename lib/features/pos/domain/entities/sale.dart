@@ -36,7 +36,7 @@ class Sale extends Equatable {
     required this.createdAt,
     this.discount = 0,
     this.tax = 0,
-    this.status = SaleStatus.pending,
+    this.status = SaleStatus.completed,
     this.promoterId,
     this.notes,
     this.paymentMethod = 'EFECTIVO',
@@ -44,7 +44,7 @@ class Sale extends Equatable {
     this.deliveryFee = 0.0,
     this.customerName,
     this.customerPhone,
-    this.isLocked = false,
+    this.isLocked = true,
     this.storeLocation = 'ALMACEN',
     this.usuarioId,
   });

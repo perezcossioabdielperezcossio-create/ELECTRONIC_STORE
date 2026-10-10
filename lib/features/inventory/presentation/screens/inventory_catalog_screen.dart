@@ -30,7 +30,8 @@ class _InventoryCatalogScreenState extends State<InventoryCatalogScreen> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthViewModel?>();
-    final bool isAdmin = auth?.currentUser?.role == UserRole.admin;
+    final bool isSeller = auth?.currentUser?.role == UserRole.seller || (auth?.isSeller ?? false);
+    final bool isAdmin = !isSeller;
 
     return Scaffold(
       appBar: AppBar(

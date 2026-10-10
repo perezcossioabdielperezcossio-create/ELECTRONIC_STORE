@@ -252,12 +252,16 @@ class DashboardViewModel extends ChangeNotifier {
     }
   }
 
-  Future<void> changeDate(DateTime newDate, {String? sellerUsuarioId}) async {
-    _selectedDate = newDate;
-    if (sellerUsuarioId != null) {
+  Future<void> loadAuditForDate(DateTime date, {String? sellerUsuarioId}) async {
+    _selectedDate = date;
+    if (sellerUsuarioId != null && sellerUsuarioId.isNotEmpty) {
       await loadSellerDashboardData(sellerUsuarioId);
     } else {
       await loadDashboardData();
     }
+  }
+
+  Future<void> changeDate(DateTime newDate, {String? sellerUsuarioId}) async {
+    await loadAuditForDate(newDate, sellerUsuarioId: sellerUsuarioId);
   }
 }

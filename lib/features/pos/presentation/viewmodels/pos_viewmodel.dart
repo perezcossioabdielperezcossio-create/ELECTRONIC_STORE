@@ -536,6 +536,8 @@ class PosViewModel extends ChangeNotifier {
       discount:       _globalDiscount,
       storeLocation:  targetLocation,
       usuarioId:      usuarioId,
+      status:         SaleStatus.completed,
+      isLocked:       true,
     );
 
     final result = await createSale(CreateSaleParams(sale));
