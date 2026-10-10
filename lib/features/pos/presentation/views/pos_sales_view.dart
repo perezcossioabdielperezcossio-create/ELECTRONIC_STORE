@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../auth/domain/entities/user.dart';
 import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
+import '../../../inventory/presentation/viewmodels/inventory_viewmodel.dart';
 import '../viewmodels/pos_viewmodel.dart';
 import '../widgets/checkout_bottom_sheet.dart';
 import '../../domain/entities/sale_item.dart';
@@ -42,6 +44,8 @@ class _PosSalesViewState extends State<PosSalesView> {
   void _showAddCustomPriceDialog(BuildContext context, Product product, PosViewModel vm) {
     final qtyController = TextEditingController(text: '1');
     final priceController = TextEditingController(text: product.standardSellingPrice.toStringAsFixed(2));
+    final auth = context.read<AuthViewModel?>();
+    final bool isAdmin = auth?.currentUser?.role == UserRole.admin;
 
     showDialog(
       context: context,
@@ -64,7 +68,7 @@ class _PosSalesViewState extends State<PosSalesView> {
                       priceController.text = product.standardSellingPrice.toStringAsFixed(2);
                     },
                   ),
-                  if (product.promoterBasePrice != null)
+                  if (isAdmin && product.promoterBasePrice != null)
                     ActionChip(
                       avatar: const Icon(Icons.storefront, size: 16, color: Colors.amber),
                       label: Text('Mayorista: Bs. ${product.promoterBasePrice!.toStringAsFixed(2)}'),
@@ -130,6 +134,9 @@ class _PosSalesViewState extends State<PosSalesView> {
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthViewModel?>();
+    final bool isAdmin = auth?.currentUser?.role == UserRole.admin;
+
     return Consumer<PosViewModel>(
       builder: (context, viewModel, child) {
         return Scaffold(
@@ -198,29 +205,45 @@ class _PosSalesViewState extends State<PosSalesView> {
                   ),
                 ),
 
-              // Lista de Productos
+              // Lista de Productos con Pull-to-Refresh
               Expanded(
-                child: viewModel.isLoadingProducts
-                    ? const Center(child: CircularProgressIndicator())
-                    : viewModel.filteredProducts.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.inventory_2_outlined, size: 48, color: Colors.grey.shade400),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'No se encontraron productos coincidentes',
-                                  style: TextStyle(color: Colors.grey.shade600),
+                child: RefreshIndicator(
+                  onRefresh: () async {
+                    final invVm = context.read<InventoryViewModel>();
+                    final posVm = context.read<PosViewModel>();
+                    await invVm.loadProducts();
+                    await posVm.refreshCatalog();
+                  },
+                  child: viewModel.isLoadingProducts
+                      ? const Center(child: CircularProgressIndicator())
+                      : viewModel.filteredProducts.isEmpty
+                          ? LayoutBuilder(
+                              builder: (context, constraints) => SingleChildScrollView(
+                                physics: const AlwaysScrollableScrollPhysics(),
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                                  child: Center(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.inventory_2_outlined, size: 48, color: Colors.grey.shade400),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          'No se encontraron productos coincidentes',
+                                          style: TextStyle(color: Colors.grey.shade600),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 ),
-                              ],
-                            ),
-                          )
-                        : ListView.separated(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            itemCount: viewModel.filteredProducts.length,
-                            separatorBuilder: (_, index) => const Divider(height: 1),
-                            itemBuilder: (context, index) {
+                              ),
+                            )
+                          : ListView.separated(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              itemCount: viewModel.filteredProducts.length,
+                              separatorBuilder: (_, index) => const Divider(height: 1),
+                              itemBuilder: (context, index) {
                               final product = viewModel.filteredProducts[index];
                               final availableStock = viewModel.getAvailableStock(product);
                               final bool isOutOfStock = availableStock <= 0;
@@ -289,7 +312,7 @@ class _PosSalesViewState extends State<PosSalesView> {
                                                   'Estándar: Bs. ${product.standardSellingPrice.toStringAsFixed(2)}',
                                                   style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                                                 ),
-                                                if (product.promoterBasePrice != null)
+                                                if (isAdmin && product.promoterBasePrice != null)
                                                   Container(
                                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                                     decoration: BoxDecoration(
@@ -367,6 +390,7 @@ class _PosSalesViewState extends State<PosSalesView> {
                               );
                             },
                           ),
+                ),
               ),
             ],
           ),

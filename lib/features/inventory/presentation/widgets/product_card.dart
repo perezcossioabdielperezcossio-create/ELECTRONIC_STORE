@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../auth/domain/entities/user.dart';
 import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 import '../../../auth/presentation/widgets/admin_approval_dialog.dart';
 import '../../domain/entities/product.dart';
 import '../viewmodels/inventory_viewmodel.dart';
 import '../screens/edit_product_sheet.dart';
 import '../screens/add_lot_sheet.dart';
+import '../screens/receive_stock_sheet.dart';
 import 'stock_status_badge.dart';
 
 class ProductCard extends StatelessWidget {
@@ -77,7 +79,7 @@ class ProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthViewModel?>();
-    final isAdmin = auth?.isAdmin ?? true;
+    final bool isAdmin = auth?.currentUser?.role == UserRole.admin;
 
     final visibleLots = isAdmin 
         ? product.lots.where((l) => l.isActive).toList()
@@ -168,6 +170,21 @@ class ProductCard extends StatelessWidget {
                     ),
                   ),
                 ],
+              )
+            else
+              IconButton(
+                icon: const Icon(Icons.add_shopping_cart, color: Colors.teal),
+                tooltip: 'Recibir Mercancía',
+                onPressed: () {
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    builder: (_) => ReceiveStockSheet(
+                      viewModel: context.read<InventoryViewModel>(),
+                      initialProduct: product,
+                    ),
+                  );
+                },
               ),
           ],
         ),
@@ -244,12 +261,28 @@ class ProductCard extends StatelessWidget {
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text(
-                  'Precio: Bs. ${product.standardSellingPrice.toStringAsFixed(2)}',
+                  'Estándar: Bs. ${product.standardSellingPrice.toStringAsFixed(2)}',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     color: Colors.deepPurple,
                   ),
                 ),
+                if (isAdmin && product.promoterBasePrice != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade50,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      'Mayorista: Bs. ${product.promoterBasePrice!.toStringAsFixed(2)}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.amber.shade900,
+                      ),
+                    ),
+                  ),
                 if (isAdmin)
                   Text(
                     'Último Costo: ${product.latestCost != null ? 'Bs. ${product.latestCost!.toStringAsFixed(2)}' : 'N/A'}',

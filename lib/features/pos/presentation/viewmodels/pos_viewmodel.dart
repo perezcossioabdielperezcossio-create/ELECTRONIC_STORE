@@ -208,6 +208,15 @@ class PosViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> refreshCatalog() async {
+    await loadProducts();
+    await loadClients();
+    await loadDeliveries();
+    if (syncManager != null) {
+      await syncManager!.syncPendingOperations();
+    }
+  }
+
   Future<void> loadClients() async {
     if (getClientsUseCase == null) return;
     _isLoadingClients = true;

@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../viewmodels/dashboard_viewmodel.dart';
 import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
+import '../../../inventory/presentation/viewmodels/inventory_viewmodel.dart';
+import '../../../pos/presentation/viewmodels/pos_viewmodel.dart';
 import '../../../pos/domain/entities/sale.dart';
 
 class SellerDashboardView extends StatefulWidget {
@@ -21,11 +23,11 @@ class _SellerDashboardViewState extends State<SellerDashboardView> {
     });
   }
 
-  void _loadData() {
+  Future<void> _loadData() async {
     final auth = context.read<AuthViewModel>();
     final userPhone = auth.currentUser?.celular ?? '';
     if (userPhone.isNotEmpty) {
-      context.read<DashboardViewModel>().loadSellerDashboardData(userPhone);
+      await context.read<DashboardViewModel>().loadSellerDashboardData(userPhone);
     }
   }
 
@@ -191,8 +193,15 @@ class _SellerDashboardViewState extends State<SellerDashboardView> {
           final arqueo = vm.sellerArqueo;
 
           return RefreshIndicator(
-            onRefresh: () async => _loadData(),
+            onRefresh: () async {
+              final invVm = context.read<InventoryViewModel>();
+              final posVm = context.read<PosViewModel>();
+              await _loadData();
+              await invVm.loadProducts();
+              await posVm.refreshCatalog();
+            },
             child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(16),
               children: [
                 // Header Info
