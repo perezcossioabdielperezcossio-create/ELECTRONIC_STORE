@@ -15,6 +15,9 @@ class SellerDashboardView extends StatefulWidget {
 }
 
 class _SellerDashboardViewState extends State<SellerDashboardView> {
+  /// Cached reference to avoid calling context.read in dispose().
+  DashboardViewModel? _dashboardVM;
+
   @override
   void initState() {
     super.initState();
@@ -27,8 +30,18 @@ class _SellerDashboardViewState extends State<SellerDashboardView> {
     final auth = context.read<AuthViewModel>();
     final userPhone = auth.currentUser?.celular ?? '';
     if (userPhone.isNotEmpty) {
-      await context.read<DashboardViewModel>().loadSellerDashboardData(userPhone);
+      _dashboardVM = context.read<DashboardViewModel>();
+      // Register this seller's ID so downstream sync refreshes their data.
+      _dashboardVM!.setActiveSellerUsuarioId(userPhone);
+      await _dashboardVM!.loadSellerDashboardData(userPhone);
     }
+  }
+
+  @override
+  void dispose() {
+    // Clear the active seller so admin view is not affected after leaving.
+    _dashboardVM?.setActiveSellerUsuarioId(null);
+    super.dispose();
   }
 
   void _showSaleDetailDialog(BuildContext context, Sale sale) {

@@ -24,7 +24,10 @@ class DashboardViewModel extends ChangeNotifier {
   final SyncManager? syncManager;
   final DashboardRepository? dashboardRepository;
 
-  StreamSubscription? _syncSubscription;
+  StreamSubscription<SyncCompletedEvent>? _syncSubscription;
+
+  /// The phone/userId of the currently active seller (set by SellerDashboardView).
+  String? _activeSellerUsuarioId;
 
   DashboardState _state = DashboardState.initial;
   DashboardState get state => _state;
@@ -83,9 +86,22 @@ class DashboardViewModel extends ChangeNotifier {
     _initSyncListener();
   }
 
+  /// Register the seller currently viewing SellerDashboardView so downstream
+  /// sync can refresh their specific metrics reactively.
+  void setActiveSellerUsuarioId(String? usuarioId) {
+    _activeSellerUsuarioId = usuarioId;
+  }
+
   void _initSyncListener() {
-    _syncSubscription = syncManager?.onRemoteDataChanged.listen((_) {
-      loadDashboardData();
+    // Listen to sales and lots events: sales affect revenue metrics, lots affect Capital Inmovilizado.
+    _syncSubscription = syncManager?.onSyncCompleted
+        .where((event) => event.table == 'sales' || event.table == 'lots')
+        .listen((_) {
+      if (_activeSellerUsuarioId != null && _activeSellerUsuarioId!.isNotEmpty) {
+        loadSellerDashboardData(_activeSellerUsuarioId!);
+      } else {
+        loadDashboardData();
+      }
     });
   }
 
