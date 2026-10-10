@@ -48,9 +48,9 @@ class InventoryRepositoryImpl implements InventoryRepository {
   }
 
   @override
-  Future<Either<Failure, List<Lot>>> consumeStock(String productId, int quantity) async {
+  Future<Either<Failure, List<Lot>>> consumeStock(String productId, int quantity, {String? location}) async {
     try {
-      final models = await localDataSource.consumeStock(productId, quantity);
+      final models = await localDataSource.consumeStock(productId, quantity, location: location);
       final entities = models.map((m) => Lot(
         id: m.id,
         productId: m.productId,
@@ -58,10 +58,12 @@ class InventoryRepositoryImpl implements InventoryRepository {
         initialQuantity: m.initialQuantity,
         currentQuantity: m.currentQuantity,
         realUnitCost: m.realUnitCost,
+        promoterBasePrice: m.promoterBasePrice,
+        location: m.location,
       )).toList();
       return Right(entities);
     } catch (e) {
-      return Left(DatabaseFailure('Error consuming stock: \$e'));
+      return Left(DatabaseFailure('Error consuming stock: $e'));
     }
   }
 
@@ -72,7 +74,7 @@ class InventoryRepositoryImpl implements InventoryRepository {
       final products = models.map<Product>((m) => m).toList();
       return Right(products);
     } catch (e) {
-      return Left(DatabaseFailure('Error getting products: \$e'));
+      return Left(DatabaseFailure('Error getting products: $e'));
     }
   }
 
@@ -83,7 +85,7 @@ class InventoryRepositoryImpl implements InventoryRepository {
       await localDataSource.updateProduct(productModel);
       return const Right(unit);
     } catch (e) {
-      return Left(DatabaseFailure('Error updating product: \$e'));
+      return Left(DatabaseFailure('Error updating product: $e'));
     }
   }
 
@@ -93,7 +95,17 @@ class InventoryRepositoryImpl implements InventoryRepository {
       await localDataSource.deleteProduct(productId);
       return const Right(unit);
     } catch (e) {
-      return Left(DatabaseFailure('Error deleting product: \$e'));
+      return Left(DatabaseFailure('Error deleting product: $e'));
+    }
+  }
+
+  @override
+  Future<Either<Failure, Unit>> deleteLot(String lotId) async {
+    try {
+      await localDataSource.deleteLot(lotId);
+      return const Right(unit);
+    } catch (e) {
+      return Left(DatabaseFailure('Error deleting lot: $e'));
     }
   }
 }

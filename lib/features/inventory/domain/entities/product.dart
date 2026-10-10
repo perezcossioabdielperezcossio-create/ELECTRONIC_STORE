@@ -43,6 +43,20 @@ class Product {
         .fold(0, (sum, lot) => sum + lot.currentQuantity);
   }
 
+  /// The available stock physically located in the store (Tienda).
+  int get stockInTienda {
+    return lots
+        .where((lot) => lot.isActive && lot.location.toUpperCase() == 'TIENDA')
+        .fold(0, (sum, lot) => sum + lot.currentQuantity);
+  }
+
+  /// The available stock physically located in the central warehouse (Almacén).
+  int get stockInAlmacen {
+    return lots
+        .where((lot) => lot.isActive && lot.location.toUpperCase() != 'TIENDA')
+        .fold(0, (sum, lot) => sum + lot.currentQuantity);
+  }
+
   /// The current status of the product based on available stock and threshold.
   StockStatus get status {
     final stock = availableStock;
@@ -62,6 +76,15 @@ class Product {
     final sortedLots = List<Lot>.from(lots)
       ..sort((a, b) => b.purchaseDate.compareTo(a.purchaseDate));
     return sortedLots.first.realUnitCost;
+  }
+
+  /// The wholesale / promoter base price of active lots.
+  double? get promoterBasePrice {
+    final activeLotsWithPrice = lots.where((lot) => lot.isActive && lot.promoterBasePrice != null && lot.promoterBasePrice! > 0);
+    if (activeLotsWithPrice.isNotEmpty) {
+      return activeLotsWithPrice.first.promoterBasePrice;
+    }
+    return null;
   }
 
   /// The total capital tied up in all active lots of this product.

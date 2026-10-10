@@ -8,9 +8,9 @@ class GetFinancialOverviewUseCase {
 
   GetFinancialOverviewUseCase(this.repository);
 
-  Future<Either<Failure, FinancialOverviewResult>> call() async {
+  Future<Either<Failure, FinancialOverviewResult>> call({String? origenVenta}) async {
     try {
-      final balance = await repository.getBalancePatrimonial();
+      final balance = await repository.getBalancePatrimonial(origenVenta: origenVenta);
       final canales = await repository.getMetricasCanal();
       return Right(FinancialOverviewResult(
         balancePatrimonial: balance,

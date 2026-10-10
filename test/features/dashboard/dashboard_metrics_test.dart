@@ -42,6 +42,7 @@ void main() {
               product_id TEXT NOT NULL,
               current_quantity INTEGER NOT NULL,
               real_unit_cost REAL NOT NULL,
+              location TEXT NOT NULL DEFAULT 'ALMACEN',
               is_active INTEGER DEFAULT 1
           )
         ''');

@@ -8,9 +8,17 @@ class GetDailyCashAuditUseCase {
 
   GetDailyCashAuditUseCase(this.repository);
 
-  Future<Either<Failure, ArqueoDiario>> call({DateTime? date}) async {
+  Future<Either<Failure, ArqueoDiario>> call({
+    DateTime? date,
+    String? usuarioId,
+    String? origenVenta,
+  }) async {
     try {
-      final arqueo = await repository.getArqueoDiario(date: date);
+      final arqueo = await repository.getArqueoDiario(
+        date: date,
+        usuarioId: usuarioId,
+        origenVenta: origenVenta,
+      );
       return Right(arqueo);
     } catch (e) {
       return Left(DatabaseFailure('Error obteniendo el arqueo diario: ${e.toString()}'));

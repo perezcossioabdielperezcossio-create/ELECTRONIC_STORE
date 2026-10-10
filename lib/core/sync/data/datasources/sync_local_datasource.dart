@@ -1,8 +1,9 @@
 import 'package:sqflite/sqflite.dart';
 import '../../../../core/database/database_helper.dart';
 import '../models/sync_operation_model.dart';
-
 import '../../../../features/inventory/data/models/lot_model.dart';
+import '../../../../features/clients/data/models/client_model.dart';
+import '../../../../features/deliveries/data/models/delivery_model.dart';
 
 abstract class SyncLocalDataSource {
   Future<void> enqueue(SyncOperationModel operation);
@@ -12,8 +13,16 @@ abstract class SyncLocalDataSource {
   Future<void> syncProducts(List<Map<String, dynamic>> products);
   Future<void> syncLots(List<Map<String, dynamic>> lots);
   Future<void> syncSales(List<Map<String, dynamic>> sales);
+  Future<void> syncClients(List<Map<String, dynamic>> clients);
+  Future<void> syncDeliveries(List<Map<String, dynamic>> deliveries);
   Future<void> insertOrUpdateLot(LotModel lot);
   Future<void> deleteLot(String id);
+  Future<void> insertOrUpdateClient(ClientModel client);
+  Future<void> deleteClient(String id);
+  Future<List<ClientModel>> getClients();
+  Future<void> insertOrUpdateDelivery(DeliveryModel delivery);
+  Future<void> deleteDelivery(String id);
+  Future<List<DeliveryModel>> getDeliveries();
 }
 
 class SyncLocalDataSourceImpl implements SyncLocalDataSource {
@@ -68,6 +77,137 @@ class SyncLocalDataSourceImpl implements SyncLocalDataSource {
       where: 'id = ?',
       whereArgs: [id],
     );
+  }
+
+  @override
+  Future<void> insertOrUpdateDelivery(DeliveryModel delivery) async {
+    final db = await dbHelper.database;
+    try {
+      await db.insert(
+        'deliveries',
+        delivery.toSqliteMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    } catch (_) {}
+  }
+
+  @override
+  Future<void> deleteDelivery(String id) async {
+    final db = await dbHelper.database;
+    try {
+      await db.delete('deliveries', where: 'id = ?', whereArgs: [id]);
+    } catch (_) {}
+  }
+
+  @override
+  Future<List<DeliveryModel>> getDeliveries() async {
+    final db = await dbHelper.database;
+    try {
+      final results = await db.query('deliveries', orderBy: 'nombre ASC');
+      return results.map((m) => DeliveryModel.fromMap(m)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  @override
+  Future<void> syncDeliveries(List<Map<String, dynamic>> deliveries) async {
+    final db = await dbHelper.database;
+    await db.transaction((txn) async {
+      for (final rawDelivery in deliveries) {
+        try {
+          final deliveryModel = DeliveryModel.fromMap(rawDelivery);
+          if (deliveryModel.id.isNotEmpty) {
+            try {
+              await txn.insert(
+                'deliveries',
+                deliveryModel.toSqliteMap(),
+                conflictAlgorithm: ConflictAlgorithm.replace,
+              );
+            } catch (_) {}
+          }
+        } catch (_) {
+          // ignore mapping errors for incomplete remote docs
+        }
+      }
+    });
+  }
+
+  @override
+  Future<void> insertOrUpdateClient(ClientModel client) async {
+    final db = await dbHelper.database;
+    try {
+      await db.insert(
+        'clientes',
+        client.toSqliteMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    } catch (_) {}
+    try {
+      await db.insert(
+        'customers',
+        client.toSqliteCustomerMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    } catch (_) {}
+  }
+
+  @override
+  Future<void> deleteClient(String id) async {
+    final db = await dbHelper.database;
+    try {
+      await db.delete('clientes', where: 'id = ?', whereArgs: [id]);
+    } catch (_) {}
+    try {
+      await db.delete('customers', where: 'id = ?', whereArgs: [id]);
+    } catch (_) {}
+  }
+
+  @override
+  Future<List<ClientModel>> getClients() async {
+    final db = await dbHelper.database;
+    try {
+      final results = await db.query('clientes', orderBy: 'creado_en DESC');
+      if (results.isNotEmpty) {
+        return results.map((m) => ClientModel.fromMap(m)).toList();
+      }
+    } catch (_) {}
+    try {
+      final results = await db.query('customers', orderBy: 'created_at DESC');
+      return results.map((m) => ClientModel.fromMap(m)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  @override
+  Future<void> syncClients(List<Map<String, dynamic>> clients) async {
+    final db = await dbHelper.database;
+    await db.transaction((txn) async {
+      for (final rawClient in clients) {
+        try {
+          final clientModel = ClientModel.fromMap(rawClient);
+          if (clientModel.id.isNotEmpty) {
+            try {
+              await txn.insert(
+                'clientes',
+                clientModel.toSqliteMap(),
+                conflictAlgorithm: ConflictAlgorithm.replace,
+              );
+            } catch (_) {}
+            try {
+              await txn.insert(
+                'customers',
+                clientModel.toSqliteCustomerMap(),
+                conflictAlgorithm: ConflictAlgorithm.replace,
+              );
+            } catch (_) {}
+          }
+        } catch (_) {
+          // ignore mapping errors for incomplete remote docs
+        }
+      }
+    });
   }
 
   @override
@@ -167,47 +307,97 @@ class SyncLocalDataSourceImpl implements SyncLocalDataSource {
         try {
           final saleMap = Map<String, dynamic>.from(rawSale);
           final itemsList = saleMap.remove('items');
+          final detailsList = saleMap.remove('sale_details');
           saleMap.remove('clientTimestamp');
           saleMap.remove('lastModified');
 
-          final validCols = {
-            'id', 'created_at', 'payment_method', 'delivery_method', 
+          final validSalesCols = {
+            'id', 'cliente_id', 'delivery_id', 'delivery_name', 'total_cobrado', 'metodo_pago', 'tipo_entrega', 
+            'fecha_venta', 'created_at', 'payment_method', 'delivery_method', 
             'delivery_fee', 'discount', 'tax', 'total', 'status', 
             'customer_name', 'customer_phone', 'promoter_id', 'notes', 'is_locked'
           };
-          saleMap.removeWhere((k, v) => !validCols.contains(k));
+          saleMap.removeWhere((k, v) => !validSalesCols.contains(k));
+
+          // Ensure basic fields
+          saleMap['total'] ??= saleMap['total_cobrado'];
+          saleMap['total_cobrado'] ??= saleMap['total'];
+          saleMap['payment_method'] ??= saleMap['metodo_pago'] ?? 'EFECTIVO';
+          saleMap['metodo_pago'] ??= saleMap['payment_method'];
+          saleMap['delivery_method'] ??= saleMap['tipo_entrega'] ?? 'TIENDA';
+          saleMap['tipo_entrega'] ??= saleMap['delivery_method'];
+          saleMap['created_at'] ??= saleMap['fecha_venta'] ?? DateTime.now().toIso8601String();
+          saleMap['fecha_venta'] ??= saleMap['created_at'];
 
           if (saleMap.containsKey('id')) {
-            await txn.insert(
-              'sales',
-              saleMap,
-              conflictAlgorithm: ConflictAlgorithm.replace,
-            );
+            try {
+              await txn.insert(
+                'sales',
+                saleMap,
+                conflictAlgorithm: ConflictAlgorithm.replace,
+              );
+            } catch (_) {}
+            try {
+              await txn.insert(
+                'ventas',
+                saleMap,
+                conflictAlgorithm: ConflictAlgorithm.replace,
+              );
+            } catch (_) {}
           }
 
-          if (itemsList is List) {
-            for (final item in itemsList) {
-              if (item is Map<String, dynamic>) {
-                final itemMap = Map<String, dynamic>.from(item);
-                final validItemCols = {
-                  'id', 'sale_id', 'product_id', 'product_name', 
-                  'quantity', 'unit_price', 'unit_cost', 'line_discount'
-                };
-                itemMap.removeWhere((k, v) => !validItemCols.contains(k));
+          // Process sale details / items
+          final combinedList = (detailsList is List ? detailsList : (itemsList is List ? itemsList : []));
+          for (final item in combinedList) {
+            if (item is Map<String, dynamic>) {
+              final itemMap = Map<String, dynamic>.from(item);
+              final id = itemMap['id'] ?? '${saleMap['id']}_${itemMap['product_id'] ?? itemMap['lote_id']}';
+              final saleId = itemMap['venta_id'] ?? itemMap['sale_id'] ?? saleMap['id'];
+              final lotId = itemMap['lote_id'] ?? itemMap['lot_id'];
+              final prodId = itemMap['product_id'] ?? '';
+              final prodName = itemMap['product_name'] ?? '';
+              final qty = (itemMap['cantidad'] as num?)?.toInt() ?? (itemMap['quantity'] as num?)?.toInt() ?? 1;
+              final unitPrice = (itemMap['precio_unitario_cobrado'] as num?)?.toDouble() ?? (itemMap['unit_price'] as num?)?.toDouble() ?? 0.0;
+              final unitCost = (itemMap['costo_unitario_compra'] as num?)?.toDouble() ?? (itemMap['unit_cost'] as num?)?.toDouble() ?? 0.0;
+              final lineDiscount = (itemMap['line_discount'] as num?)?.toDouble() ?? 0.0;
 
-                if (!itemMap.containsKey('id') || itemMap['id'] == null) {
-                  itemMap['id'] = '${saleMap['id']}_${itemMap['product_id']}';
-                }
-                if (!itemMap.containsKey('sale_id') || itemMap['sale_id'] == null) {
-                  itemMap['sale_id'] = saleMap['id'];
-                }
-
+              // Insert to detalle_ventas
+              try {
                 await txn.insert(
-                  'sale_items',
-                  itemMap,
+                  'detalle_ventas',
+                  {
+                    'id': id,
+                    'venta_id': saleId,
+                    'lote_id': lotId,
+                    'product_id': prodId,
+                    'product_name': prodName,
+                    'cantidad': qty,
+                    'costo_unitario_compra': unitCost,
+                    'precio_unitario_cobrado': unitPrice,
+                    'line_discount': lineDiscount,
+                  },
                   conflictAlgorithm: ConflictAlgorithm.replace,
                 );
-              }
+              } catch (_) {}
+
+              // Insert to sale_items
+              try {
+                await txn.insert(
+                  'sale_items',
+                  {
+                    'id': id,
+                    'sale_id': saleId,
+                    'lote_id': lotId,
+                    'product_id': prodId,
+                    'product_name': prodName,
+                    'quantity': qty,
+                    'unit_price': unitPrice,
+                    'unit_cost': unitCost,
+                    'line_discount': lineDiscount,
+                  },
+                  conflictAlgorithm: ConflictAlgorithm.replace,
+                );
+              } catch (_) {}
             }
           }
         } catch (_) {
@@ -216,5 +406,4 @@ class SyncLocalDataSourceImpl implements SyncLocalDataSource {
       }
     });
   }
-
 }

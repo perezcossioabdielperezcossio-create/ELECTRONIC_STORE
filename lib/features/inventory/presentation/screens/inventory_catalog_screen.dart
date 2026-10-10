@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../../auth/domain/entities/user.dart';
+import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
+import '../../../pos/presentation/viewmodels/pos_viewmodel.dart';
 import '../viewmodels/inventory_viewmodel.dart';
 import '../widgets/product_card.dart';
 import 'add_product_lot_sheet.dart';
+import 'receive_stock_sheet.dart';
 
 class InventoryCatalogScreen extends StatefulWidget {
   final InventoryViewModel viewModel;
@@ -24,73 +29,77 @@ class _InventoryCatalogScreenState extends State<InventoryCatalogScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthViewModel?>();
+    final bool isAdmin = auth?.currentUser?.role == UserRole.admin;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Catálogo de Inventario'),
+        title: Text(isAdmin ? 'Catálogo de Inventario' : 'Catálogo de Productos'),
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(130.0),
+          preferredSize: Size.fromHeight(isAdmin ? 130.0 : 65.0),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: Column(
               children: [
-                ListenableBuilder(
-                  listenable: widget.viewModel,
-                  builder: (context, _) {
-                    return Row(
-                      children: [
-                        Expanded(
-                          child: Card(
-                            color: Colors.blue.shade50,
-                            child: Padding(
-                              padding: const EdgeInsets.all(8.0),
-                              child: Column(
-                                children: [
-                                  const Text(
-                                    'Capital Inmovilizado',
-                                    style: TextStyle(fontSize: 12),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  Text(
-                                    '${widget.viewModel.totalCapitalInmovilizado.toStringAsFixed(2)} Bs',
-                                    style: const TextStyle(fontWeight: FontWeight.bold),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
+                if (isAdmin)
+                  ListenableBuilder(
+                    listenable: widget.viewModel,
+                    builder: (context, _) {
+                      return Row(
+                        children: [
+                          Expanded(
+                            child: Card(
+                              color: Colors.blue.shade50,
+                              child: Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: Column(
+                                  children: [
+                                    const Text(
+                                      'Capital Inmovilizado',
+                                      style: TextStyle(fontSize: 12),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    Text(
+                                      '${widget.viewModel.totalCapitalInmovilizado.toStringAsFixed(2)} Bs',
+                                      style: const TextStyle(fontWeight: FontWeight.bold),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        Expanded(
-                          child: Card(
-                            color: Colors.green.shade50,
-                            child: Padding(
-                              padding: const EdgeInsets.all(8.0),
-                              child: Column(
-                                children: [
-                                  const Text(
-                                    'Ganancia Potencial',
-                                    style: TextStyle(fontSize: 12),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  Text(
-                                    '${widget.viewModel.gananciaPotencialEstimada.toStringAsFixed(2)} Bs',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
+                          Expanded(
+                            child: Card(
+                              color: Colors.green.shade50,
+                              child: Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: Column(
+                                  children: [
+                                    const Text(
+                                      'Ganancia Potencial',
+                                      style: TextStyle(fontSize: 12),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    Text(
+                                      '${widget.viewModel.gananciaPotencialEstimada.toStringAsFixed(2)} Bs',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ],
-                    );
-                  }
-                ),
-                const SizedBox(height: 8.0),
+                        ],
+                      );
+                    },
+                  ),
+                if (isAdmin) const SizedBox(height: 8.0),
                 Row(
                   children: [
                     Expanded(
@@ -156,53 +165,86 @@ class _InventoryCatalogScreenState extends State<InventoryCatalogScreen> {
             },
           ),
           Expanded(
-            child: ListenableBuilder(
-              listenable: widget.viewModel,
-              builder: (context, _) {
-                if (widget.viewModel.state == ViewState.loading) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                if (widget.viewModel.state == ViewState.error) {
-                  return Center(
-                    child: Text(
-                      widget.viewModel.errorMessage ?? 'Error desconocido',
-                      style: const TextStyle(color: Colors.red),
-                    ),
-                  );
-                }
-
-                final products = widget.viewModel.filteredProducts;
-
-                if (products.isEmpty) {
-                  return const Center(
-                    child: Text('No se encontraron productos.'),
-                  );
-                }
-
-                return ListView.builder(
-                  padding: const EdgeInsets.all(8.0),
-                  itemCount: products.length,
-                  itemBuilder: (context, index) {
-                    final product = products[index];
-                    return ProductCard(product: product);
-                  },
-                );
+            child: RefreshIndicator(
+              onRefresh: () async {
+                final invVm = context.read<InventoryViewModel>();
+                final posVm = context.read<PosViewModel>();
+                await invVm.loadProducts();
+                await posVm.refreshCatalog();
               },
+              child: ListenableBuilder(
+                listenable: widget.viewModel,
+                builder: (context, _) {
+                  if (widget.viewModel.state == ViewState.loading) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  if (widget.viewModel.state == ViewState.error) {
+                    return LayoutBuilder(
+                      builder: (context, constraints) => SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                          child: Center(
+                            child: Text(
+                              widget.viewModel.errorMessage ?? 'Error desconocido',
+                              style: const TextStyle(color: Colors.red),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+
+                  final products = widget.viewModel.filteredProducts;
+
+                  if (products.isEmpty) {
+                    return LayoutBuilder(
+                      builder: (context, constraints) => SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                          child: const Center(
+                            child: Text('No se encontraron productos.'),
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+
+                  return ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(8.0),
+                    itemCount: products.length,
+                    itemBuilder: (context, index) {
+                      final product = products[index];
+                      return ProductCard(product: product);
+                    },
+                  );
+                },
+              ),
             ),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
-          showModalBottomSheet(
-            context: context,
-            isScrollControlled: true,
-            builder: (_) => AddProductLotSheet(viewModel: widget.viewModel),
-          );
+          if (isAdmin) {
+            showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              builder: (_) => AddProductLotSheet(viewModel: widget.viewModel),
+            );
+          } else {
+            showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              builder: (_) => ReceiveStockSheet(viewModel: widget.viewModel),
+            );
+          }
         },
-        icon: const Icon(Icons.add),
-        label: const Text('Nuevo Producto'),
+        icon: Icon(isAdmin ? Icons.add : Icons.add_shopping_cart),
+        label: Text(isAdmin ? 'Nuevo Producto' : 'Recibir Mercancía'),
       ),
     );
   }

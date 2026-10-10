@@ -7,6 +7,29 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'core/sync/data/datasources/firestore_remote_data_source.dart';
 import 'core/sync/domain/services/sync_manager.dart';
 
+// Auth
+import 'features/auth/data/datasources/auth_local_datasource.dart';
+import 'features/auth/data/datasources/auth_remote_datasource.dart';
+import 'features/auth/data/repositories/auth_repository_impl.dart';
+import 'features/auth/domain/usecases/get_current_session_usecase.dart';
+import 'features/auth/domain/usecases/login_usecase.dart';
+import 'features/auth/domain/usecases/logout_usecase.dart';
+import 'features/auth/domain/usecases/register_seller_usecase.dart';
+import 'features/auth/domain/usecases/seed_master_admins_usecase.dart';
+import 'features/auth/presentation/viewmodels/auth_viewmodel.dart';
+import 'features/auth/presentation/views/login_view.dart';
+
+import 'features/clients/data/datasources/client_local_datasource.dart';
+import 'features/clients/data/repositories/client_repository_impl.dart';
+import 'features/clients/domain/usecases/get_clients_usecase.dart';
+import 'features/clients/domain/usecases/save_client_usecase.dart';
+
+import 'features/deliveries/data/datasources/delivery_local_datasource.dart';
+import 'features/deliveries/data/repositories/delivery_repository_impl.dart';
+import 'features/deliveries/domain/usecases/get_deliveries_usecase.dart';
+import 'features/deliveries/domain/usecases/save_delivery_usecase.dart';
+import 'features/deliveries/domain/usecases/delete_delivery_usecase.dart';
+
 import 'features/promoters/data/datasources/promoter_local_datasource.dart';
 import 'features/promoters/data/repositories/promoter_repository_impl.dart';
 import 'features/promoters/domain/usecases/get_all_promoters.dart';
@@ -40,6 +63,8 @@ import 'features/main/presentation/views/home_shell_view.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 
+import 'features/inventory/domain/usecases/delete_lot_usecase.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
@@ -55,7 +80,20 @@ void main() async {
   
   final dbHelper = DatabaseHelper.instance;
   
-  // Sync (P-04: Firestore Remote DataSource Real)
+  // Auth DataSources & UseCases
+  final authLocalDs = AuthLocalDataSourceImpl(dbHelper: dbHelper);
+  final authRemoteDs = AuthRemoteDataSourceImpl(firestore: FirebaseFirestore.instance);
+  final authRepo = AuthRepositoryImpl(
+    localDataSource: authLocalDs,
+    remoteDataSource: authRemoteDs,
+  );
+  final loginUseCase = LoginUseCase(authRepo);
+  final registerSellerUseCase = RegisterSellerUseCase(authRepo);
+  final getCurrentSessionUseCase = GetCurrentSessionUseCase(authRepo);
+  final logoutUseCase = LogoutUseCase(authRepo);
+  final seedMasterAdminsUseCase = SeedMasterAdminsUseCase(authRepo);
+
+  // Sync (Firestore Remote DataSource Real)
   final syncLocalDs = SyncLocalDataSourceImpl(dbHelper: dbHelper);
   final remoteSyncDs = FirestoreRemoteDataSource(firestore: FirebaseFirestore.instance);
   final syncManager = SyncManager(
@@ -63,6 +101,19 @@ void main() async {
     remoteDataSource: remoteSyncDs,
   )..startRealtimeSync();
   
+  // CRM / Clients
+  final clientLocalDs = ClientLocalDataSourceImpl(dbHelper: dbHelper);
+  final clientRepo = ClientRepositoryImpl(clientLocalDs);
+  final getClients = GetClientsUseCase(clientRepo);
+  final saveClient = SaveClientUseCase(clientRepo);
+
+  // Deliveries / Repartidores
+  final deliveryLocalDs = DeliveryLocalDataSourceImpl(dbHelper: dbHelper);
+  final deliveryRepo = DeliveryRepositoryImpl(deliveryLocalDs);
+  final getDeliveries = GetDeliveriesUseCase(deliveryRepo);
+  final saveDelivery = SaveDeliveryUseCase(deliveryRepo);
+  final deleteDelivery = DeleteDeliveryUseCase(deliveryRepo);
+
   // POS
   final posLocalDs = PosLocalDatasourceImpl(dbHelper);
   final posRepo = PosRepositoryImpl(posLocalDs);
@@ -80,6 +131,7 @@ void main() async {
   final createProductWithLot = CreateProductWithLotUseCase(invRepo);
   final updateProductUseCase = UpdateProductUseCase(invRepo);
   final deleteProductUseCase = DeleteProductUseCase(invRepo);
+  final deleteLotUseCase = DeleteLotUseCase(invRepo);
 
   // Dashboard
   final dashboardLocalDs = DashboardLocalDatasourceImpl(dbHelper);
@@ -87,7 +139,7 @@ void main() async {
   final getFinancialOverview = GetFinancialOverviewUseCase(dashboardRepo);
   final getDailyCashAudit = GetDailyCashAuditUseCase(dashboardRepo);
 
-  // Promoters (P-02)
+  // Promoters
   final promoterLocalDs = PromoterLocalDatasourceImpl(dbHelper);
   final promoterRepo = PromoterRepositoryImpl(promoterLocalDs);
   final getAllPromoters = GetAllPromoters(promoterRepo);
@@ -95,6 +147,15 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
+        ChangeNotifierProvider(
+          create: (_) => AuthViewModel(
+            loginUseCase: loginUseCase,
+            registerSellerUseCase: registerSellerUseCase,
+            getCurrentSessionUseCase: getCurrentSessionUseCase,
+            logoutUseCase: logoutUseCase,
+            seedMasterAdminsUseCase: seedMasterAdminsUseCase,
+          )..initSession(),
+        ),
         ChangeNotifierProvider.value(value: syncManager),
         ChangeNotifierProvider(
           create: (_) => InventoryViewModel(
@@ -104,6 +165,7 @@ void main() async {
             createProductWithLotUseCase: createProductWithLot,
             updateProductUseCase: updateProductUseCase,
             deleteProductUseCase: deleteProductUseCase,
+            deleteLotUseCase: deleteLotUseCase,
             syncManager: syncManager,
           )..loadProducts(),
         ),
@@ -112,8 +174,16 @@ void main() async {
             createSale: createSale,
             getAllProducts: getAllProducts,
             voidSaleUseCase: voidSale,
+            getClientsUseCase: getClients,
+            saveClientUseCase: saveClient,
+            getDeliveriesUseCase: getDeliveries,
+            saveDeliveryUseCase: saveDelivery,
+            deleteDeliveryUseCase: deleteDelivery,
             syncManager: syncManager,
-          )..loadProducts(), // Pre-load products on startup
+          )
+            ..loadProducts()
+            ..loadClients()
+            ..loadDeliveries(),
         ),
         ChangeNotifierProvider(
           create: (_) => DashboardViewModel(
@@ -121,6 +191,7 @@ void main() async {
             getDailyCashAudit: getDailyCashAudit,
             getSalesByDate: getSalesByDate,
             syncManager: syncManager,
+            dashboardRepository: dashboardRepo,
           )..loadDashboardData(),
         ),
         ChangeNotifierProvider(
@@ -146,7 +217,32 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: const HomeShellView(),
+      home: const MainAuthGate(),
+    );
+  }
+}
+
+class MainAuthGate extends StatelessWidget {
+  const MainAuthGate({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<AuthViewModel>(
+      builder: (context, auth, _) {
+        if (!auth.isInitialized) {
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+
+        if (auth.isAuthenticated) {
+          return const HomeShellView();
+        }
+
+        return const LoginView();
+      },
     );
   }
 }

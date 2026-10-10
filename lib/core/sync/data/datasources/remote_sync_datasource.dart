@@ -20,6 +20,8 @@ abstract class RemoteSyncDataSource {
   Stream<List<Map<String, dynamic>>> listenToRemoteProducts();
   Stream<List<Map<String, dynamic>>> listenToRemoteLots();
   Stream<List<Map<String, dynamic>>> listenToRemoteSales();
+  Stream<List<Map<String, dynamic>>> listenToRemoteClients();
+  Stream<List<Map<String, dynamic>>> listenToRemoteDeliveries();
   Stream<List<Map<String, dynamic>>> listenToRemoteInventoryChanges();
 }
 
@@ -42,6 +44,12 @@ class MockRemoteSyncDataSource implements RemoteSyncDataSource {
 
   @override
   Stream<List<Map<String, dynamic>>> listenToRemoteSales() => const Stream.empty();
+
+  @override
+  Stream<List<Map<String, dynamic>>> listenToRemoteClients() => const Stream.empty();
+
+  @override
+  Stream<List<Map<String, dynamic>>> listenToRemoteDeliveries() => const Stream.empty();
 
   @override
   Stream<List<Map<String, dynamic>>> listenToRemoteInventoryChanges() => const Stream.empty();

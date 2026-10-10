@@ -37,6 +37,18 @@ class ArqueoDiario extends Equatable {
   final List<DesgloseMetodoPago> desglose;
 
   double get gananciaNetaRealTotal => ingresoBrutoTotal - capitalBaseRecuperadoTotal;
+  double get totalIngresos => ingresoBrutoTotal;
+
+  double get ingresosEfectivo => _getIngresoPorMetodo('EFECTIVO');
+  double get ingresosQr => _getIngresoPorMetodo('QR');
+  double get ingresosTransferencia => _getIngresoPorMetodo('TRANSFERENCIA');
+  double get ingresosTarjeta => _getIngresoPorMetodo('TARJETA');
+
+  double _getIngresoPorMetodo(String method) {
+    return desglose
+        .where((d) => d.metodo.toUpperCase().trim() == method.toUpperCase().trim())
+        .fold(0.0, (acc, d) => acc + d.ingresoBruto);
+  }
 
   const ArqueoDiario({
     required this.fecha,

@@ -18,6 +18,8 @@ class SaleItem extends Equatable {
   });
 
   double get lineTotal => (unitPrice * quantity) - lineDiscount;
+  double get soldUnitPrice => unitPrice;
+  double get subtotal => lineTotal;
 
   @override
   List<Object> get props =>

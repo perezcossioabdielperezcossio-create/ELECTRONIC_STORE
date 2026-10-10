@@ -25,6 +25,7 @@ abstract class InventoryRepository {
 
   Future<Either<Failure, Unit>> updateProduct(Product product);
   Future<Either<Failure, Unit>> deleteProduct(String productId);
-  Future<Either<Failure, List<Lot>>> consumeStock(String productId, int quantity);
+  Future<Either<Failure, Unit>> deleteLot(String lotId);
+  Future<Either<Failure, List<Lot>>> consumeStock(String productId, int quantity, {String? location});
   Future<Either<Failure, List<Product>>> getAllProducts();
 }

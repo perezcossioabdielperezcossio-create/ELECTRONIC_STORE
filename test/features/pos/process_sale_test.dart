@@ -63,7 +63,10 @@ void main() {
             purchase_date TEXT,
             initial_quantity INTEGER,
             current_quantity INTEGER,
-            real_unit_cost REAL
+            real_unit_cost REAL,
+            promoter_base_price REAL,
+            location TEXT NOT NULL DEFAULT 'ALMACEN',
+            is_active INTEGER DEFAULT 1
           )
         ''');
         await db.execute('''

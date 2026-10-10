@@ -11,6 +11,8 @@ import '../../domain/usecases/delete_product_usecase.dart';
 import '../../../../core/usecases/usecase.dart';
 import '../../../../core/sync/domain/services/sync_manager.dart';
 
+import '../../domain/usecases/delete_lot_usecase.dart';
+
 enum ViewState { idle, loading, error }
 enum InventoryFilter { all, lowStock, outOfStock }
 
@@ -21,6 +23,7 @@ class InventoryViewModel extends ChangeNotifier {
   final CreateProductWithLotUseCase createProductWithLotUseCase;
   final UpdateProductUseCase updateProductUseCase;
   final DeleteProductUseCase deleteProductUseCase;
+  final DeleteLotUseCase? deleteLotUseCase;
   final SyncManager? syncManager;
 
   StreamSubscription? _syncSubscription;
@@ -32,6 +35,7 @@ class InventoryViewModel extends ChangeNotifier {
     required this.createProductWithLotUseCase,
     required this.updateProductUseCase,
     required this.deleteProductUseCase,
+    this.deleteLotUseCase,
     this.syncManager,
   }) {
     _initSyncListener();
@@ -170,6 +174,23 @@ class InventoryViewModel extends ChangeNotifier {
 
   Future<bool> deleteProduct(String productId) async {
     final result = await deleteProductUseCase(DeleteProductParams(productId: productId));
+    return result.fold(
+      (failure) {
+        _errorMessage = failure.message;
+        notifyListeners();
+        return false;
+      },
+      (_) async {
+        await loadProducts();
+        syncManager?.syncPendingOperations();
+        return true;
+      },
+    );
+  }
+
+  Future<bool> deleteLot(String lotId) async {
+    if (deleteLotUseCase == null) return false;
+    final result = await deleteLotUseCase!(DeleteLotParams(lotId: lotId));
     return result.fold(
       (failure) {
         _errorMessage = failure.message;
