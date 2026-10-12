@@ -35,7 +35,7 @@ class DashboardLocalDatasourceImpl implements DashboardLocalDatasource {
     final args = <dynamic>[];
 
     if (origenVenta != null && origenVenta.isNotEmpty) {
-      query += " AND UPPER(COALESCE(l.location, 'ALMACEN')) = UPPER(?)";
+      query += " AND UPPER(COALESCE(NULLIF(trim(l.location), ''), 'ALMACEN')) = UPPER(?)";
       args.add(origenVenta);
     }
 
@@ -74,18 +74,18 @@ class DashboardLocalDatasourceImpl implements DashboardLocalDatasource {
         final args = <dynamic>[];
 
         if (salesCols.contains('created_at') && salesCols.contains('fecha_venta')) {
-          whereConditions.add("(substr(COALESCE(s.fecha_venta, s.created_at), 1, 10) = ? OR date(COALESCE(s.fecha_venta, s.created_at)) = date(?))");
+          whereConditions.add("(substr(COALESCE(s.fecha_venta, s.created_at, ''), 1, 10) = ? OR date(COALESCE(s.fecha_venta, s.created_at, 'now')) = date(?))");
           args.addAll([dateString, dateString]);
         } else if (salesCols.contains('fecha_venta')) {
-          whereConditions.add("(substr(s.fecha_venta, 1, 10) = ? OR date(s.fecha_venta) = date(?))");
+          whereConditions.add("(substr(COALESCE(s.fecha_venta, ''), 1, 10) = ? OR date(COALESCE(s.fecha_venta, 'now')) = date(?))");
           args.addAll([dateString, dateString]);
         } else if (salesCols.contains('created_at')) {
-          whereConditions.add("(substr(s.created_at, 1, 10) = ? OR date(s.created_at) = date(?))");
+          whereConditions.add("(substr(COALESCE(s.created_at, ''), 1, 10) = ? OR date(COALESCE(s.created_at, 'now')) = date(?))");
           args.addAll([dateString, dateString]);
         }
 
         if (salesCols.contains('status')) {
-          whereConditions.add("(UPPER(COALESCE(s.status, 'COMPLETED')) != 'VOIDED' AND UPPER(COALESCE(s.status, 'COMPLETED')) != 'ANULADA')");
+          whereConditions.add("UPPER(COALESCE(s.status, 'COMPLETED')) NOT IN ('VOIDED', 'ANULADA')");
         }
 
         if (usuarioId != null && usuarioId.isNotEmpty) {
@@ -98,16 +98,17 @@ class DashboardLocalDatasourceImpl implements DashboardLocalDatasource {
           }
         }
 
-        if (origenVenta != null && origenVenta.isNotEmpty) {
+        if (origenVenta != null && origenVenta.isNotEmpty && origenVenta != 'Consolidado') {
+          final filter = origenVenta == 'Almacén Central' ? 'ALMACEN' : origenVenta;
           if (salesCols.contains('origen_venta') && salesCols.contains('store_location')) {
-            whereConditions.add("UPPER(COALESCE(s.origen_venta, s.store_location, 'ALMACEN')) = UPPER(?)");
-            args.add(origenVenta);
+            whereConditions.add("UPPER(COALESCE(NULLIF(trim(s.origen_venta), ''), NULLIF(trim(s.store_location), ''), 'ALMACEN')) = UPPER(?)");
+            args.add(filter);
           } else if (salesCols.contains('origen_venta')) {
-            whereConditions.add("UPPER(COALESCE(s.origen_venta, 'ALMACEN')) = UPPER(?)");
-            args.add(origenVenta);
+            whereConditions.add("UPPER(COALESCE(NULLIF(trim(s.origen_venta), ''), 'ALMACEN')) = UPPER(?)");
+            args.add(filter);
           } else if (salesCols.contains('store_location')) {
-            whereConditions.add("UPPER(COALESCE(s.store_location, 'ALMACEN')) = UPPER(?)");
-            args.add(origenVenta);
+            whereConditions.add("UPPER(COALESCE(NULLIF(trim(s.store_location), ''), 'ALMACEN')) = UPPER(?)");
+            args.add(filter);
           }
         }
 
@@ -140,18 +141,18 @@ class DashboardLocalDatasourceImpl implements DashboardLocalDatasource {
           final args = <dynamic>[];
 
           if (ventasCols.contains('fecha_venta') && ventasCols.contains('created_at')) {
-            whereConditions.add("(substr(COALESCE(s.fecha_venta, s.created_at), 1, 10) = ? OR date(COALESCE(s.fecha_venta, s.created_at)) = date(?))");
+            whereConditions.add("(substr(COALESCE(s.fecha_venta, s.created_at, ''), 1, 10) = ? OR date(COALESCE(s.fecha_venta, s.created_at, 'now')) = date(?))");
             args.addAll([dateString, dateString]);
           } else if (ventasCols.contains('fecha_venta')) {
-            whereConditions.add("(substr(s.fecha_venta, 1, 10) = ? OR date(s.fecha_venta) = date(?))");
+            whereConditions.add("(substr(COALESCE(s.fecha_venta, ''), 1, 10) = ? OR date(COALESCE(s.fecha_venta, 'now')) = date(?))");
             args.addAll([dateString, dateString]);
           } else if (ventasCols.contains('created_at')) {
-            whereConditions.add("(substr(s.created_at, 1, 10) = ? OR date(s.created_at) = date(?))");
+            whereConditions.add("(substr(COALESCE(s.created_at, ''), 1, 10) = ? OR date(COALESCE(s.created_at, 'now')) = date(?))");
             args.addAll([dateString, dateString]);
           }
 
           if (ventasCols.contains('status')) {
-            whereConditions.add("(UPPER(COALESCE(s.status, 'COMPLETED')) != 'VOIDED' AND UPPER(COALESCE(s.status, 'COMPLETED')) != 'ANULADA')");
+            whereConditions.add("UPPER(COALESCE(s.status, 'COMPLETED')) NOT IN ('VOIDED', 'ANULADA')");
           }
 
           if (usuarioId != null && usuarioId.isNotEmpty && ventasCols.contains('usuario_id')) {
@@ -159,9 +160,10 @@ class DashboardLocalDatasourceImpl implements DashboardLocalDatasource {
             args.add(usuarioId);
           }
 
-          if (origenVenta != null && origenVenta.isNotEmpty && ventasCols.contains('origen_venta')) {
-            whereConditions.add("UPPER(COALESCE(s.origen_venta, 'ALMACEN')) = UPPER(?)");
-            args.add(origenVenta);
+          if (origenVenta != null && origenVenta.isNotEmpty && origenVenta != 'Consolidado' && ventasCols.contains('origen_venta')) {
+            final filter = origenVenta == 'Almacén Central' ? 'ALMACEN' : origenVenta;
+            whereConditions.add("UPPER(COALESCE(NULLIF(trim(s.origen_venta), ''), 'ALMACEN')) = UPPER(?)");
+            args.add(filter);
           }
 
           final whereClause = whereConditions.isNotEmpty ? "WHERE ${whereConditions.join(" AND ")}" : "";
@@ -236,7 +238,7 @@ class DashboardLocalDatasourceImpl implements DashboardLocalDatasource {
         }
 
         if (salesCols.contains('status')) {
-          whereConditions.add("(UPPER(COALESCE(status, 'COMPLETED')) != 'VOIDED' AND UPPER(COALESCE(status, 'COMPLETED')) != 'ANULADA')");
+          whereConditions.add("UPPER(COALESCE(status, 'COMPLETED')) NOT IN ('VOIDED', 'ANULADA')");
         }
 
         if (usuarioId != null && usuarioId.isNotEmpty) {
@@ -249,16 +251,17 @@ class DashboardLocalDatasourceImpl implements DashboardLocalDatasource {
           }
         }
 
-        if (origenVenta != null && origenVenta.isNotEmpty) {
+        if (origenVenta != null && origenVenta.isNotEmpty && origenVenta != 'Consolidado') {
+          final filter = origenVenta == 'Almacén Central' ? 'ALMACEN' : origenVenta;
           if (salesCols.contains('origen_venta') && salesCols.contains('store_location')) {
-            whereConditions.add("UPPER(COALESCE(origen_venta, store_location, 'ALMACEN')) = UPPER(?)");
-            args.add(origenVenta);
+            whereConditions.add("UPPER(COALESCE(NULLIF(trim(origen_venta), ''), NULLIF(trim(store_location), ''), 'ALMACEN')) = UPPER(?)");
+            args.add(filter);
           } else if (salesCols.contains('origen_venta')) {
-            whereConditions.add("UPPER(COALESCE(origen_venta, 'ALMACEN')) = UPPER(?)");
-            args.add(origenVenta);
+            whereConditions.add("UPPER(COALESCE(NULLIF(trim(origen_venta), ''), 'ALMACEN')) = UPPER(?)");
+            args.add(filter);
           } else if (salesCols.contains('store_location')) {
-            whereConditions.add("UPPER(COALESCE(store_location, 'ALMACEN')) = UPPER(?)");
-            args.add(origenVenta);
+            whereConditions.add("UPPER(COALESCE(NULLIF(trim(store_location), ''), 'ALMACEN')) = UPPER(?)");
+            args.add(filter);
           }
         }
 
@@ -291,7 +294,7 @@ class DashboardLocalDatasourceImpl implements DashboardLocalDatasource {
           }
 
           if (ventasCols.contains('status')) {
-            whereConditions.add("(UPPER(COALESCE(status, 'COMPLETED')) != 'VOIDED' AND UPPER(COALESCE(status, 'COMPLETED')) != 'ANULADA')");
+            whereConditions.add("UPPER(COALESCE(status, 'COMPLETED')) NOT IN ('VOIDED', 'ANULADA')");
           }
 
           if (usuarioId != null && usuarioId.isNotEmpty && ventasCols.contains('usuario_id')) {
@@ -299,9 +302,10 @@ class DashboardLocalDatasourceImpl implements DashboardLocalDatasource {
             args.add(usuarioId);
           }
 
-          if (origenVenta != null && origenVenta.isNotEmpty && ventasCols.contains('origen_venta')) {
-            whereConditions.add("UPPER(COALESCE(origen_venta, 'ALMACEN')) = UPPER(?)");
-            args.add(origenVenta);
+          if (origenVenta != null && origenVenta.isNotEmpty && origenVenta != 'Consolidado' && ventasCols.contains('origen_venta')) {
+            final filter = origenVenta == 'Almacén Central' ? 'ALMACEN' : origenVenta;
+            whereConditions.add("UPPER(COALESCE(NULLIF(trim(origen_venta), ''), 'ALMACEN')) = UPPER(?)");
+            args.add(filter);
           }
 
           final whereClause = whereConditions.isNotEmpty ? "WHERE ${whereConditions.join(" AND ")}" : "";
@@ -348,7 +352,7 @@ class DashboardLocalDatasourceImpl implements DashboardLocalDatasource {
         }
 
         if (salesCols.contains('status')) {
-          whereConditions.add("(UPPER(COALESCE(status, 'COMPLETED')) != 'VOIDED' AND UPPER(COALESCE(status, 'COMPLETED')) != 'ANULADA')");
+          whereConditions.add("UPPER(COALESCE(status, 'COMPLETED')) NOT IN ('VOIDED', 'ANULADA')");
         }
 
         if (usuarioId != null && usuarioId.isNotEmpty) {
@@ -361,16 +365,17 @@ class DashboardLocalDatasourceImpl implements DashboardLocalDatasource {
           }
         }
 
-        if (origenVenta != null && origenVenta.isNotEmpty) {
+        if (origenVenta != null && origenVenta.isNotEmpty && origenVenta != 'Consolidado') {
+          final filter = origenVenta == 'Almacén Central' ? 'ALMACEN' : origenVenta;
           if (salesCols.contains('origen_venta') && salesCols.contains('store_location')) {
-            whereConditions.add("UPPER(COALESCE(origen_venta, store_location, 'ALMACEN')) = UPPER(?)");
-            args.add(origenVenta);
+            whereConditions.add("UPPER(COALESCE(NULLIF(trim(origen_venta), ''), NULLIF(trim(store_location), ''), 'ALMACEN')) = UPPER(?)");
+            args.add(filter);
           } else if (salesCols.contains('origen_venta')) {
-            whereConditions.add("UPPER(COALESCE(origen_venta, 'ALMACEN')) = UPPER(?)");
-            args.add(origenVenta);
+            whereConditions.add("UPPER(COALESCE(NULLIF(trim(origen_venta), ''), 'ALMACEN')) = UPPER(?)");
+            args.add(filter);
           } else if (salesCols.contains('store_location')) {
-            whereConditions.add("UPPER(COALESCE(store_location, 'ALMACEN')) = UPPER(?)");
-            args.add(origenVenta);
+            whereConditions.add("UPPER(COALESCE(NULLIF(trim(store_location), ''), 'ALMACEN')) = UPPER(?)");
+            args.add(filter);
           }
         }
 
@@ -408,7 +413,7 @@ class DashboardLocalDatasourceImpl implements DashboardLocalDatasource {
           }
 
           if (ventasCols.contains('status')) {
-            whereConditions.add("(UPPER(COALESCE(status, 'COMPLETED')) != 'VOIDED' AND UPPER(COALESCE(status, 'COMPLETED')) != 'ANULADA')");
+            whereConditions.add("UPPER(COALESCE(status, 'COMPLETED')) NOT IN ('VOIDED', 'ANULADA')");
           }
 
           if (usuarioId != null && usuarioId.isNotEmpty && ventasCols.contains('usuario_id')) {
@@ -416,9 +421,10 @@ class DashboardLocalDatasourceImpl implements DashboardLocalDatasource {
             args.add(usuarioId);
           }
 
-          if (origenVenta != null && origenVenta.isNotEmpty && ventasCols.contains('origen_venta')) {
-            whereConditions.add("UPPER(COALESCE(origen_venta, 'ALMACEN')) = UPPER(?)");
-            args.add(origenVenta);
+          if (origenVenta != null && origenVenta.isNotEmpty && origenVenta != 'Consolidado' && ventasCols.contains('origen_venta')) {
+            final filter = origenVenta == 'Almacén Central' ? 'ALMACEN' : origenVenta;
+            whereConditions.add("UPPER(COALESCE(NULLIF(trim(origen_venta), ''), 'ALMACEN')) = UPPER(?)");
+            args.add(filter);
           }
 
           final whereStr = whereConditions.isNotEmpty ? whereConditions.join(" AND ") : null;

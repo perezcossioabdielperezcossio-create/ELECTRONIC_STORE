@@ -182,11 +182,11 @@ class PosLocalDatasourceImpl implements PosLocalDatasource {
 
       // Save sale in sales & ventas
       final salesMap = Map<String, dynamic>.from(model.toSqliteSalesMap());
-      salesMap['status'] = model.status == SaleStatus.voided ? 'VOIDED' : 'COMPLETED';
+      salesMap['status'] = 'COMPLETED';
       salesMap['is_locked'] = 1;
 
       final ventasMap = Map<String, dynamic>.from(model.toSqliteVentasMap());
-      ventasMap['status'] = model.status == SaleStatus.voided ? 'VOIDED' : 'COMPLETED';
+      ventasMap['status'] = 'COMPLETED';
       ventasMap['is_locked'] = 1;
 
       await _safeInsert(txn, 'sales', salesMap);
@@ -202,7 +202,7 @@ class PosLocalDatasourceImpl implements PosLocalDatasource {
         createdAt: model.createdAt,
         discount: model.discount,
         tax: model.tax,
-        status: model.status == SaleStatus.voided ? SaleStatus.voided : SaleStatus.completed,
+        status: SaleStatus.completed,
         promoterId: model.promoterId,
         notes: model.notes,
         paymentMethod: model.paymentMethod,
@@ -216,7 +216,7 @@ class PosLocalDatasourceImpl implements PosLocalDatasource {
       );
 
       final payloadMap = fullSale.toMap();
-      payloadMap['status'] = fullSale.status == SaleStatus.voided ? 'VOIDED' : 'COMPLETED';
+      payloadMap['status'] = 'COMPLETED';
       payloadMap['is_locked'] = true;
 
       await txn.insert('sync_queue', {

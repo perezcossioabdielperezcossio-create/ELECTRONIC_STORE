@@ -15,6 +15,7 @@ abstract class SyncLocalDataSource {
   Future<void> syncSales(List<Map<String, dynamic>> sales);
   Future<void> syncClients(List<Map<String, dynamic>> clients);
   Future<void> syncDeliveries(List<Map<String, dynamic>> deliveries);
+  Future<void> syncUsers(List<Map<String, dynamic>> users);
   Future<void> insertOrUpdateLot(LotModel lot);
   Future<void> deleteLot(String id);
   Future<void> insertOrUpdateClient(ClientModel client);
@@ -402,6 +403,29 @@ class SyncLocalDataSourceImpl implements SyncLocalDataSource {
           }
         } catch (_) {
           // ignore mapping errors for incomplete remote docs
+        }
+      }
+    });
+  }
+  @override
+  Future<void> syncUsers(List<Map<String, dynamic>> users) async {
+    final db = await dbHelper.database;
+    await db.transaction((txn) async {
+      for (final rawUser in users) {
+        try {
+          final userMap = Map<String, dynamic>.from(rawUser);
+          userMap.remove('clientTimestamp');
+          userMap.remove('lastModified');
+          
+          if (userMap.containsKey('celular')) {
+            await txn.insert(
+              'users',
+              userMap,
+              conflictAlgorithm: ConflictAlgorithm.replace,
+            );
+          }
+        } catch (_) {
+          // ignore mapping errors
         }
       }
     });

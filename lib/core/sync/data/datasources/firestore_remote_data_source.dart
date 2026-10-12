@@ -5,7 +5,6 @@ import 'remote_sync_datasource.dart';
 import '../models/sync_operation_model.dart';
 import '../../../../features/inventory/data/models/product_model.dart';
 import '../../../../features/inventory/data/models/lot_model.dart';
-import '../../../../features/pos/domain/entities/sale.dart';
 import '../../../../features/pos/data/models/sale_model.dart';
 import '../../../../features/pos/data/models/sale_detail_model.dart';
 import '../../../../features/clients/data/models/client_model.dart';
@@ -64,8 +63,7 @@ class FirestoreRemoteDataSource implements RemoteSyncDataSource {
           final saleId = (payloadMap['id'] as String?) ?? operation.id;
           await firestore.collection('sales').doc(saleId).delete();
         } else {
-          final isVoided = payloadMap['status']?.toString().toUpperCase() == 'VOIDED';
-          payloadMap['status'] = isVoided ? 'VOIDED' : 'COMPLETED';
+          payloadMap['status'] = 'COMPLETED';
           payloadMap['is_locked'] = true;
           final sale = SaleModel.fromMap(payloadMap);
           final rawDetails = payloadMap['sale_details'] ?? payloadMap['items'];
@@ -121,7 +119,7 @@ class FirestoreRemoteDataSource implements RemoteSyncDataSource {
   Future<void> saveSaleTransaction(SaleModel sale, List<SaleDetailModel> details) async {
     final docRef = firestore.collection('sales').doc(sale.id);
     final saleMap = sale.toMap();
-    saleMap['status'] = sale.status == SaleStatus.voided ? 'VOIDED' : 'COMPLETED';
+    saleMap['status'] = 'COMPLETED';
     saleMap['is_locked'] = true;
     
     if (details.isNotEmpty) {
@@ -189,7 +187,7 @@ class FirestoreRemoteDataSource implements RemoteSyncDataSource {
       await docRef.delete();
     } else {
       final mapToSet = fullPayload != null ? Map<String, dynamic>.from(fullPayload) : sale.toMap();
-      mapToSet['status'] = sale.status == SaleStatus.voided ? 'VOIDED' : 'COMPLETED';
+      mapToSet['status'] = 'COMPLETED';
       mapToSet['is_locked'] = true;
       await docRef.set(mapToSet, SetOptions(merge: true));
     }
@@ -247,6 +245,18 @@ class FirestoreRemoteDataSource implements RemoteSyncDataSource {
   @override
   Stream<List<Map<String, dynamic>>> listenToRemoteSales() {
     return firestore.collection('sales').snapshots().map((snapshot) {
+      return snapshot.docs.map((doc) {
+        final data = Map<String, dynamic>.from(doc.data());
+        data['id'] ??= doc.id;
+        return data;
+      }).toList();
+    });
+  }
+
+  /// Listen to remote changes for Users
+  @override
+  Stream<List<Map<String, dynamic>>> listenToRemoteUsers() {
+    return firestore.collection('users').snapshots().map((snapshot) {
       return snapshot.docs.map((doc) {
         final data = Map<String, dynamic>.from(doc.data());
         data['id'] ??= doc.id;

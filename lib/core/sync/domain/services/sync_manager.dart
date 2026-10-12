@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import '../../data/datasources/sync_local_datasource.dart';
 import '../../data/datasources/remote_sync_datasource.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../../core/database/database_helper.dart';
 
 class SyncCompletedEvent {
   final String table;
@@ -20,6 +22,7 @@ class SyncManager extends ChangeNotifier {
   StreamSubscription<List<Map<String, dynamic>>>? _remoteSalesSubscription;
   StreamSubscription<List<Map<String, dynamic>>>? _remoteClientsSubscription;
   StreamSubscription<List<Map<String, dynamic>>>? _remoteDeliveriesSubscription;
+  StreamSubscription<List<Map<String, dynamic>>>? _remoteUsersSubscription;
   final StreamController<void> _remoteDataChangedController = StreamController<void>.broadcast();
   final StreamController<SyncCompletedEvent> _syncEventsController = StreamController<SyncCompletedEvent>.broadcast();
 
@@ -47,6 +50,7 @@ class SyncManager extends ChangeNotifier {
     _remoteSalesSubscription?.cancel();
     _remoteClientsSubscription?.cancel();
     _remoteDeliveriesSubscription?.cancel();
+    _remoteUsersSubscription?.cancel();
 
     _remoteProductsSubscription = remoteDataSource.listenToRemoteProducts().listen((products) async {
       await localDataSource.syncProducts(products);
@@ -83,6 +87,13 @@ class SyncManager extends ChangeNotifier {
       notifyListeners();
     });
 
+    _remoteUsersSubscription = remoteDataSource.listenToRemoteUsers().listen((users) async {
+      await localDataSource.syncUsers(users);
+      _remoteDataChangedController.add(null);
+      _syncEventsController.add(const SyncCompletedEvent('users'));
+      notifyListeners();
+    });
+
     syncPendingOperations();
   }
 
@@ -115,6 +126,7 @@ class SyncManager extends ChangeNotifier {
     _remoteSalesSubscription?.cancel();
     _remoteClientsSubscription?.cancel();
     _remoteDeliveriesSubscription?.cancel();
+    _remoteUsersSubscription?.cancel();
     _remoteDataChangedController.close();
     _syncEventsController.close();
     super.dispose();
@@ -181,5 +193,58 @@ class SyncManager extends ChangeNotifier {
         await _refreshPendingCount();
       }
     }
+  }
+  /// Manually force a sync cycle (useful for pull-to-refresh)
+  Future<void> pullLatestChanges() async {
+    await syncPendingOperations();
+    if (_isOnline) {
+      startRealtimeSync();
+    }
+  }
+
+  Future<int> forceSyncSalesFromFirestore() async {
+    final snapshot = await FirebaseFirestore.instance.collection('sales').get();
+    final db = await DatabaseHelper.instance.database;
+    
+    for (var doc in snapshot.docs) {
+      final data = doc.data();
+      final id = doc.id;
+      final fecha = data['fecha_venta'] ?? data['created_at'] ?? DateTime.now().toIso8601String();
+      final total = ((data['total_cobrado'] ?? data['total'] ?? 0) as num).toDouble();
+      final metodoPago = data['metodo_pago'] ?? data['payment_method'] ?? 'EFECTIVO';
+      final origen = data['origen_venta'] ?? data['store_location'] ?? data['location'] ?? 'ALMACEN';
+      final tipoEntrega = data['tipo_entrega'] ?? data['delivery_method'] ?? 'TIENDA';
+      final usuarioId = data['usuario_id']?.toString() ?? '';
+      final status = (data['status']?.toString() ?? 'COMPLETED').toUpperCase();
+
+      // Insertar en tabla ventas
+      await db.rawInsert('''
+        INSERT OR REPLACE INTO ventas (
+          id, total_cobrado, metodo_pago, tipo_entrega, fecha_venta, status, is_locked, usuario_id, origen_venta
+        ) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+      ''', [id, total, metodoPago, tipoEntrega, fecha, status, usuarioId, origen]);
+
+      // Procesar ítems/detalles embebidos
+      final items = (data['sale_details'] ?? data['items']) as List<dynamic>? ?? [];
+      for (final item in items) {
+        if (item is Map<String, dynamic>) {
+          await db.rawInsert('''
+            INSERT OR REPLACE INTO detalle_ventas (
+              id, venta_id, lote_id, product_id, cantidad, costo_unitario_compra, precio_unitario_cobrado, line_discount
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          ''', [
+            item['id'] ?? ('${id}_${item['lote_id'] ?? item['lot_id'] ?? ''}'),
+            id,
+            item['lote_id'] ?? item['lot_id'] ?? '',
+            item['product_id'] ?? '',
+            item['cantidad'] ?? item['quantity'] ?? 1,
+            ((item['costo_unitario_compra'] ?? item['unit_cost'] ?? 0) as num).toDouble(),
+            ((item['precio_unitario_cobrado'] ?? item['unit_price'] ?? 0) as num).toDouble(),
+            ((item['line_discount'] ?? 0) as num).toDouble(),
+          ]);
+        }
+      }
+    }
+    return snapshot.docs.length;
   }
 }

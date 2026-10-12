@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../viewmodels/dashboard_viewmodel.dart';
+import 'package:electronic_store/core/sync/domain/services/sync_manager.dart';
 import '../../data/models/financial_metrics_model.dart';
 import '../../../pos/domain/entities/sale.dart';
 
@@ -51,8 +52,17 @@ class _DashboardOverviewViewState extends State<DashboardOverviewView> {
             icon: const Icon(Icons.refresh),
             tooltip: 'Actualizar',
             onPressed: () async {
+              final syncManager = context.read<SyncManager>();
               final vm = context.read<DashboardViewModel>();
+              
+              final count = await syncManager.forceSyncSalesFromFirestore();
               await vm.loadAuditForDate(vm.selectedDate);
+
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Ventas sincronizadas: $count')),
+                );
+              }
             },
           ),
         ],
