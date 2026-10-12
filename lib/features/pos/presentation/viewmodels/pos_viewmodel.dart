@@ -392,7 +392,11 @@ class PosViewModel extends ChangeNotifier {
     // Validar anti-pérdida (RF-08)
     final finalPrice = item.unitPrice - (item.quantity > 0 ? (item.lineDiscount / item.quantity) : 0);
     if (product.latestCost != null && finalPrice < product.latestCost!) {
-      _error = 'El precio unitario (Bs. ${item.unitPrice.toStringAsFixed(2)}) no puede ser menor al costo de adquisición (Bs. ${product.latestCost?.toStringAsFixed(2)})';
+      if (_stockLocation == 'TIENDA') {
+        _error = 'El precio unitario (Bs. ${item.unitPrice.toStringAsFixed(2)}) no puede ser menor al precio mínimo autorizado.';
+      } else {
+        _error = 'El precio unitario (Bs. ${item.unitPrice.toStringAsFixed(2)}) no puede ser menor al costo de adquisición (Bs. ${product.latestCost?.toStringAsFixed(2)})';
+      }
       notifyListeners();
       return;
     }
@@ -451,7 +455,11 @@ class PosViewModel extends ChangeNotifier {
       ));
 
       if (product.latestCost != null && newUnitPrice < product.latestCost!) {
-        _error = 'El precio unitario (Bs. ${newUnitPrice.toStringAsFixed(2)}) no puede ser menor al costo real (Bs. ${product.latestCost?.toStringAsFixed(2)})';
+        if (_stockLocation == 'TIENDA') {
+          _error = 'El precio unitario (Bs. ${newUnitPrice.toStringAsFixed(2)}) no puede ser menor al precio mínimo autorizado.';
+        } else {
+          _error = 'El precio unitario (Bs. ${newUnitPrice.toStringAsFixed(2)}) no puede ser menor al costo real (Bs. ${product.latestCost?.toStringAsFixed(2)})';
+        }
         notifyListeners();
         return;
       }
@@ -522,7 +530,7 @@ class PosViewModel extends ChangeNotifier {
 
     final sale = Sale(
       id:             const Uuid().v4(),
-      clienteId:      _selectedClient?.id,
+      clienteId:      _selectedClient?.id ?? 'mostrador',
       deliveryId:     _deliveryMethod == 'DELIVERY' ? _selectedDelivery?.id : null,
       deliveryName:   _deliveryMethod == 'DELIVERY' ? _selectedDelivery?.nombre : null,
       items:          List.from(_cart),
@@ -531,7 +539,9 @@ class PosViewModel extends ChangeNotifier {
       paymentMethod:  _paymentMethod,
       deliveryMethod: _deliveryMethod,
       deliveryFee:    _deliveryFee,
-      customerName:   _selectedClient?.nombreAlias ?? _customerName,
+      customerName:   (_selectedClient?.nombreAlias != null && _selectedClient!.nombreAlias.trim().isNotEmpty)
+          ? _selectedClient!.nombreAlias
+          : ((_customerName != null && _customerName!.trim().isNotEmpty) ? _customerName : 'Cliente Mostrador'),
       customerPhone:  _selectedClient?.telefonoWhatsapp ?? _customerPhone,
       discount:       _globalDiscount,
       storeLocation:  targetLocation,

@@ -41,16 +41,172 @@ class _PosSalesViewState extends State<PosSalesView> {
     super.dispose();
   }
 
+  void _showNewClientDialog(BuildContext context, PosViewModel viewModel) {
+    final nameCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    final addressCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.person_add, color: Colors.deepPurple),
+            SizedBox(width: 8),
+            Text('Nuevo Cliente'),
+          ],
+        ),
+        content: Form(
+          key: formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Nombre / Alias *',
+                    hintText: 'Ej. Juan Pérez / Tech Store',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.badge),
+                  ),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Ingresa el nombre o alias' : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: phoneCtrl,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: 'Teléfono / WhatsApp',
+                    hintText: 'Ej. +591 70000000',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.phone),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: addressCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Dirección Predeterminada',
+                    hintText: 'Ej. Av. Principal #123',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.location_on),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton.icon(
+            icon: const Icon(Icons.save),
+            label: const Text('Guardar'),
+            onPressed: () async {
+              if (formKey.currentState?.validate() == true) {
+                final newClient = await viewModel.createNewClient(
+                  nombreAlias: nameCtrl.text,
+                  telefonoWhatsapp: phoneCtrl.text,
+                  direccionPredet: addressCtrl.text,
+                );
+                if (context.mounted) {
+                  Navigator.pop(dialogCtx);
+                  if (newClient != null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Cliente "${newClient.nombreAlias}" seleccionado.'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                }
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSelectClientDialog(BuildContext context, PosViewModel vm) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.people_alt, color: Colors.deepPurple),
+            SizedBox(width: 8),
+            Text('Seleccionar Cliente'),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.person_add, color: Colors.deepPurple),
+                title: const Text('Registrar Nuevo Cliente', style: TextStyle(fontWeight: FontWeight.bold)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showNewClientDialog(context, vm);
+                },
+              ),
+              const Divider(),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: vm.clients.length,
+                  itemBuilder: (cCtx, i) {
+                    final client = vm.clients[i];
+                    final isSelected = vm.selectedClient?.id == client.id;
+                    return ListTile(
+                      leading: Icon(
+                        client.id == 'mostrador' ? Icons.storefront : Icons.person,
+                        color: isSelected ? Colors.deepPurple : Colors.grey,
+                      ),
+                      title: Text(
+                        client.nombreAlias,
+                        style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
+                      ),
+                      subtitle: client.telefonoWhatsapp != null ? Text(client.telefonoWhatsapp!) : null,
+                      trailing: isSelected ? const Icon(Icons.check, color: Colors.green) : null,
+                      onTap: () {
+                        vm.selectClient(client);
+                        Navigator.pop(ctx);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
+        ],
+      ),
+    );
+  }
+
   void _showAddCustomPriceDialog(BuildContext context, Product product, PosViewModel vm) {
-    final qtyController = TextEditingController(text: '1');
-    final priceController = TextEditingController(text: product.standardSellingPrice.toStringAsFixed(2));
+    final cartItemIdx = vm.cart.indexWhere((i) => i.productId == product.id);
+    final initialQty = cartItemIdx >= 0 ? vm.cart[cartItemIdx].quantity : 1;
+    final initialPrice = cartItemIdx >= 0 ? vm.cart[cartItemIdx].unitPrice : product.standardSellingPrice;
+
+    final qtyController = TextEditingController(text: '$initialQty');
+    final priceController = TextEditingController(text: initialPrice.toStringAsFixed(2));
     final auth = context.read<AuthViewModel?>();
     final bool isAdmin = auth?.currentUser?.role == UserRole.admin;
 
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Agregar ${product.name}'),
+        title: Text(cartItemIdx >= 0 ? 'Editar ${product.name}' : 'Agregar ${product.name}'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -108,22 +264,27 @@ class _PosSalesViewState extends State<PosSalesView> {
             child: const Text('Cancelar'),
           ),
           FilledButton.icon(
-            icon: const Icon(Icons.add_shopping_cart),
-            label: const Text('Agregar al Carrito'),
+            icon: Icon(cartItemIdx >= 0 ? Icons.check : Icons.add_shopping_cart),
+            label: Text(cartItemIdx >= 0 ? 'Actualizar Carrito' : 'Agregar al Carrito'),
             onPressed: () {
               final qty = int.tryParse(qtyController.text) ?? 1;
               final unitPrice = double.tryParse(priceController.text) ?? product.standardSellingPrice;
               
-              vm.addItem(
-                SaleItem(
-                  productId: product.id,
-                  productName: product.name,
-                  quantity: qty,
-                  unitPrice: unitPrice,
-                  unitCost: product.latestCost ?? 0.0,
-                ),
-                product,
-              );
+              if (cartItemIdx >= 0) {
+                vm.updateItemPrice(product.id, unitPrice);
+                vm.updateItemQuantity(product.id, qty, product);
+              } else {
+                vm.addItem(
+                  SaleItem(
+                    productId: product.id,
+                    productName: product.name,
+                    quantity: qty,
+                    unitPrice: unitPrice,
+                    unitCost: product.latestCost ?? 0.0,
+                  ),
+                  product,
+                );
+              }
               Navigator.pop(ctx);
             },
           ),
@@ -184,6 +345,45 @@ class _PosSalesViewState extends State<PosSalesView> {
                 ),
               ),
               
+              // Selector de Cliente Asignado (Obligatorio / Mostrador por defecto)
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+                padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer.withAlpha(40),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Theme.of(context).colorScheme.primary.withAlpha(40)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.person, size: 20, color: Colors.deepPurple),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Cliente (Obligatorio):',
+                            style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w500),
+                          ),
+                          Text(
+                            viewModel.selectedClient?.nombreAlias ?? 'Cliente Mostrador / Ocasional',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    TextButton.icon(
+                      icon: const Icon(Icons.swap_horiz, size: 16),
+                      label: const Text('Cambiar'),
+                      style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                      onPressed: () => _showSelectClientDialog(context, viewModel),
+                    ),
+                  ],
+                ),
+              ),
+
               // Banner de Error
               if (viewModel.error != null)
                 Padding(
@@ -207,50 +407,56 @@ class _PosSalesViewState extends State<PosSalesView> {
 
               // Lista de Productos con Pull-to-Refresh
               Expanded(
-                child: RefreshIndicator(
-                  onRefresh: () async {
-                    final invVm = context.read<InventoryViewModel>();
-                    final posVm = context.read<PosViewModel>();
-                    await invVm.loadProducts();
-                    await posVm.refreshCatalog();
-                  },
-                  child: viewModel.isLoadingProducts
-                      ? const Center(child: CircularProgressIndicator())
-                      : viewModel.filteredProducts.isEmpty
-                          ? LayoutBuilder(
-                              builder: (context, constraints) => SingleChildScrollView(
-                                physics: const AlwaysScrollableScrollPhysics(),
-                                child: ConstrainedBox(
-                                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                                  child: Center(
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.inventory_2_outlined, size: 48, color: Colors.grey.shade400),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          'No se encontraron productos coincidentes',
-                                          style: TextStyle(color: Colors.grey.shade600),
+                child: Builder(
+                  builder: (context) {
+                    final visibleProducts = !isAdmin
+                        ? viewModel.filteredProducts.where((p) => viewModel.getAvailableStock(p) > 0).toList()
+                        : viewModel.filteredProducts;
+
+                    return RefreshIndicator(
+                      onRefresh: () async {
+                        final invVm = context.read<InventoryViewModel>();
+                        final posVm = context.read<PosViewModel>();
+                        await invVm.loadProducts();
+                        await posVm.refreshCatalog();
+                      },
+                      child: viewModel.isLoadingProducts
+                          ? const Center(child: CircularProgressIndicator())
+                          : visibleProducts.isEmpty
+                              ? LayoutBuilder(
+                                  builder: (context, constraints) => SingleChildScrollView(
+                                    physics: const AlwaysScrollableScrollPhysics(),
+                                    child: ConstrainedBox(
+                                      constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                                      child: Center(
+                                        child: Column(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Icon(Icons.inventory_2_outlined, size: 48, color: Colors.grey.shade400),
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              'No se encontraron productos coincidentes',
+                                              style: TextStyle(color: Colors.grey.shade600),
+                                            ),
+                                          ],
                                         ),
-                                      ],
+                                      ),
                                     ),
                                   ),
-                                ),
-                              ),
-                            )
-                          : ListView.separated(
-                              physics: const AlwaysScrollableScrollPhysics(),
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              itemCount: viewModel.filteredProducts.length,
-                              separatorBuilder: (_, index) => const Divider(height: 1),
-                              itemBuilder: (context, index) {
-                              final product = viewModel.filteredProducts[index];
-                              final availableStock = viewModel.getAvailableStock(product);
-                              final bool isOutOfStock = availableStock <= 0;
-                              
-                              final cartItemIdx = viewModel.cart.indexWhere((i) => i.productId == product.id);
-                              final cartQty = cartItemIdx >= 0 ? viewModel.cart[cartItemIdx].quantity : 0;
-                              final cartPrice = cartItemIdx >= 0 ? viewModel.cart[cartItemIdx].unitPrice : product.standardSellingPrice;
+                                )
+                              : ListView.separated(
+                                  physics: const AlwaysScrollableScrollPhysics(),
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  itemCount: visibleProducts.length,
+                                  separatorBuilder: (_, index) => const Divider(height: 1),
+                                  itemBuilder: (context, index) {
+                                    final product = visibleProducts[index];
+                                    final availableStock = viewModel.getAvailableStock(product);
+                                    final bool isOutOfStock = availableStock <= 0;
+                                    
+                                    final cartItemIdx = viewModel.cart.indexWhere((i) => i.productId == product.id);
+                                    final cartQty = cartItemIdx >= 0 ? viewModel.cart[cartItemIdx].quantity : 0;
+                                    final cartPrice = cartItemIdx >= 0 ? viewModel.cart[cartItemIdx].unitPrice : product.standardSellingPrice;
 
                               return Card(
                                 elevation: 0,
@@ -365,15 +571,19 @@ class _PosSalesViewState extends State<PosSalesView> {
                                             onPressed: isOutOfStock
                                                 ? null
                                                 : () {
-                                                    viewModel.addItem(
-                                                      SaleItem(
-                                                        productId: product.id,
-                                                        productName: product.name,
-                                                        quantity: 1,
-                                                        unitPrice: product.standardSellingPrice,
-                                                      ),
-                                                      product,
-                                                    );
+                                                    if (!isAdmin) {
+                                                      _showAddCustomPriceDialog(context, product, viewModel);
+                                                    } else {
+                                                      viewModel.addItem(
+                                                        SaleItem(
+                                                          productId: product.id,
+                                                          productName: product.name,
+                                                          quantity: 1,
+                                                          unitPrice: product.standardSellingPrice,
+                                                        ),
+                                                        product,
+                                                      );
+                                                    }
                                                   },
                                           ),
                                           IconButton(
@@ -390,6 +600,8 @@ class _PosSalesViewState extends State<PosSalesView> {
                               );
                             },
                           ),
+                    );
+                  },
                 ),
               ),
             ],

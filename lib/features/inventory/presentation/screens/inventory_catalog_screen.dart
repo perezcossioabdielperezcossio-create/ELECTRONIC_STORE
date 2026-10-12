@@ -197,7 +197,10 @@ class _InventoryCatalogScreenState extends State<InventoryCatalogScreen> {
                     );
                   }
 
-                  final products = widget.viewModel.filteredProducts;
+                  final rawProducts = widget.viewModel.filteredProducts;
+                  final products = isSeller
+                      ? rawProducts.where((p) => p.stockInTienda > 0).toList()
+                      : rawProducts;
 
                   if (products.isEmpty) {
                     return LayoutBuilder(

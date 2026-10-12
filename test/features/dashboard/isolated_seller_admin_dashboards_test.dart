@@ -309,6 +309,11 @@ void main() {
 
   group('2. Seller Dashboard UI & Privacy', () {
     testWidgets('SellerDashboardView displays only seller sales and hides profit and capital metrics', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
       final mockAuth = MockAuthViewModel();
       const seller = UserModel(
         celular: '77700011',

@@ -257,15 +257,16 @@ class _SellerDashboardViewState extends State<SellerDashboardView> {
                 ),
                 const SizedBox(height: 16),
 
-                // Tarjetas de Ventas Hoy y Semana
+                // Encabezado / Resumen: Total Cobrado Hoy y Cantidad de transacciones concretadas hoy
                 Row(
                   children: [
                     Expanded(
                       child: _buildMetricCard(
                         context,
-                        title: 'Ventas Hoy',
+                        title: 'Total Cobrado Hoy',
+                        subtitle: 'Ventas Hoy',
                         amount: currencyFormat.format(vm.sellerVentasHoy),
-                        icon: Icons.today,
+                        icon: Icons.point_of_sale,
                         color: Colors.teal,
                       ),
                     ),
@@ -273,17 +274,26 @@ class _SellerDashboardViewState extends State<SellerDashboardView> {
                     Expanded(
                       child: _buildMetricCard(
                         context,
-                        title: 'Ventas Esta Semana',
-                        amount: currencyFormat.format(vm.sellerVentasSemana),
-                        icon: Icons.date_range,
+                        title: 'Transacciones Concretadas',
+                        subtitle: 'Total Hoy',
+                        amount: '${vm.sellerSales.length}',
+                        icon: Icons.receipt_long,
                         color: Colors.indigo,
                       ),
                     ),
                   ],
                 ),
+                const SizedBox(height: 12),
+                _buildMetricCard(
+                  context,
+                  title: 'Ventas Esta Semana',
+                  amount: currencyFormat.format(vm.sellerVentasSemana),
+                  icon: Icons.date_range,
+                  color: Colors.blueGrey,
+                ),
                 const SizedBox(height: 20),
 
-                // Arqueo de Caja (Desglose por método de pago)
+                // Arqueo de Caja (Desglose de cobros por método de pago)
                 Card(
                   elevation: 2,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -349,12 +359,12 @@ class _SellerDashboardViewState extends State<SellerDashboardView> {
                 ),
                 const SizedBox(height: 20),
 
-                // Lista de Ventas Recientes
+                // Lista cronológica de Ventas Realizadas
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text(
-                      'Mis Ventas del Día',
+                      'Ventas Realizadas',
                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                     Text(
@@ -382,45 +392,7 @@ class _SellerDashboardViewState extends State<SellerDashboardView> {
                     ),
                   )
                 else
-                  ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: vm.sellerSales.length,
-                    itemBuilder: (ctx, index) {
-                      final sale = vm.sellerSales[index];
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        elevation: 1,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: Colors.blue.withAlpha(40),
-                            child: Icon(_getPaymentIcon(sale.paymentMethod), color: Colors.blue, size: 20),
-                          ),
-                          title: Text(
-                            'Venta #${sale.id.length > 8 ? sale.id.substring(0, 8) : sale.id}',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                          ),
-                          subtitle: Text(
-                            '${DateFormat('HH:mm').format(sale.date)} • ${sale.paymentMethod} • ${sale.items.length} productos',
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                currencyFormat.format(sale.totalAmount),
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.green),
-                              ),
-                              const SizedBox(width: 4),
-                              const Icon(Icons.chevron_right, color: Colors.grey, size: 18),
-                            ],
-                          ),
-                          onTap: () => _showSaleDetailDialog(context, sale),
-                        ),
-                      );
-                    },
-                  ),
+                  ...vm.sellerSales.map((sale) => _buildSaleCard(context, sale, currencyFormat)),
                 const SizedBox(height: 24),
               ],
             ),
@@ -430,9 +402,203 @@ class _SellerDashboardViewState extends State<SellerDashboardView> {
     );
   }
 
+  Widget _buildSaleCard(
+    BuildContext context,
+    Sale sale,
+    NumberFormat currencyFormat,
+  ) {
+    final clientName = (sale.clientName != null && sale.clientName!.trim().isNotEmpty)
+        ? sale.clientName!
+        : 'Cliente Mostrador';
+    final formattedDateTime = DateFormat('dd/MM/yyyy HH:mm').format(sale.date);
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _showSaleDetailDialog(context, sale),
+        child: Padding(
+          padding: const EdgeInsets.all(14.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 1. Monto / Precio final cobrado (Bs.) & Venta #ID
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 16,
+                        backgroundColor: Colors.teal.withAlpha(40),
+                        child: Icon(_getPaymentIcon(sale.paymentMethod), color: Colors.teal.shade800, size: 18),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Venta #${sale.id.length > 8 ? sale.id.substring(0, 8) : sale.id}',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.green.shade300),
+                    ),
+                    child: Text(
+                      currencyFormat.format(sale.totalAmount),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: Colors.green.shade800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const Divider(height: 18),
+
+              // 2. Nombre del Cliente (o 'Cliente Mostrador')
+              Row(
+                children: [
+                  const Icon(Icons.person, size: 16, color: Colors.deepPurple),
+                  const SizedBox(width: 6),
+                  const Text(
+                    'Cliente: ',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                  ),
+                  Expanded(
+                    child: Text(
+                      clientName,
+                      style: const TextStyle(fontSize: 13, color: Colors.black87),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+
+              // 3. Fecha y hora de la venta (ej. 12/10/2026 16:30)
+              Row(
+                children: [
+                  const Icon(Icons.access_time, size: 16, color: Colors.grey),
+                  const SizedBox(width: 6),
+                  const Text(
+                    'Fecha y hora: ',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                  ),
+                  Text(
+                    formattedDateTime,
+                    style: const TextStyle(fontSize: 13, color: Colors.black87),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      sale.paymentMethod,
+                      style: TextStyle(fontSize: 11, color: Colors.grey.shade700, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+
+              // 4. Desglose de productos vendidos: Nombre/ID del producto y cantidad vendida (ej. "Calculadora x 2")
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.shopping_bag_outlined, size: 14, color: Colors.grey),
+                        SizedBox(width: 4),
+                        Text(
+                          'Desglose de productos vendidos:',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    if (sale.items.isNotEmpty)
+                      ...sale.items.map((item) {
+                        final displayName = item.productName.isNotEmpty ? item.productName : item.productId;
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2.0),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  '• $displayName x ${item.quantity}',
+                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              Text(
+                                currencyFormat.format(item.subtotal),
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey),
+                              ),
+                            ],
+                          ),
+                        );
+                      })
+                    else if (sale.details.isNotEmpty)
+                      ...sale.details.map((detail) {
+                        final displayName = detail.productName.isNotEmpty ? detail.productName : detail.productId;
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2.0),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  '• $displayName x ${detail.cantidad}',
+                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              Text(
+                                currencyFormat.format(detail.lineTotal),
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey),
+                              ),
+                            ],
+                          ),
+                        );
+                      })
+                    else
+                      const Text(
+                        'Sin desglose registrado',
+                        style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildMetricCard(
     BuildContext context, {
     required String title,
+    String? subtitle,
     required String amount,
     required IconData icon,
     required Color color,
@@ -458,7 +624,15 @@ class _SellerDashboardViewState extends State<SellerDashboardView> {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            if (subtitle != null) ...[
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+            const SizedBox(height: 10),
             Text(
               amount,
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../auth/domain/entities/user.dart';
 import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 import '../viewmodels/pos_viewmodel.dart';
 import '../../../clients/domain/entities/client.dart';
@@ -594,7 +595,12 @@ class _CheckoutBottomSheetState extends State<CheckoutBottomSheet> {
                         : () async {
                             final auth = context.read<AuthViewModel?>();
                             final activeUserPhone = auth?.currentUser?.celular;
-                            final success = await viewModel.checkout(usuarioId: activeUserPhone);
+                            final isSeller = auth?.currentUser?.role == UserRole.seller || (auth?.isSeller ?? false);
+                            final storeLocation = isSeller ? 'TIENDA' : viewModel.stockLocation;
+                            final success = await viewModel.checkout(
+                              usuarioId: activeUserPhone,
+                              storeLocation: storeLocation,
+                            );
                             if (!context.mounted) return;
                             if (success) {
                               try {
@@ -616,7 +622,9 @@ class _CheckoutBottomSheetState extends State<CheckoutBottomSheet> {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text(
-                                    'Venta registrada con éxito.\nCapital recuperado: Bs. ${viewModel.lastRecoveredCapital.toStringAsFixed(2)} | Ganancia Neta: Bs. ${viewModel.lastNetProfit.toStringAsFixed(2)}',
+                                    isSeller
+                                        ? 'Venta registrada con éxito.\nTotal cobrado: Bs. ${totalConFlete.toStringAsFixed(2)}'
+                                        : 'Venta registrada con éxito.\nCapital recuperado: Bs. ${viewModel.lastRecoveredCapital.toStringAsFixed(2)} | Ganancia Neta: Bs. ${viewModel.lastNetProfit.toStringAsFixed(2)}',
                                   ),
                                   backgroundColor: Colors.green.shade800,
                                   duration: const Duration(seconds: 4),
