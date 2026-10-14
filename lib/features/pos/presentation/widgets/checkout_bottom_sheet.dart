@@ -600,6 +600,7 @@ class _CheckoutBottomSheetState extends State<CheckoutBottomSheet> {
                             final success = await viewModel.checkout(
                               usuarioId: activeUserPhone,
                               storeLocation: storeLocation,
+                              vendedorNombre: auth?.currentUser?.nombre,
                             );
                             if (!context.mounted) return;
                             if (success) {

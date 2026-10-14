@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 import '../../../../core/database/database_helper.dart';
 import '../models/sync_operation_model.dart';
@@ -13,6 +14,7 @@ abstract class SyncLocalDataSource {
   Future<void> syncProducts(List<Map<String, dynamic>> products);
   Future<void> syncLots(List<Map<String, dynamic>> lots);
   Future<void> syncSales(List<Map<String, dynamic>> sales);
+  Future<void> syncSellerSales(List<Map<String, dynamic>> sellerSales);
   Future<void> syncClients(List<Map<String, dynamic>> clients);
   Future<void> syncDeliveries(List<Map<String, dynamic>> deliveries);
   Future<void> syncUsers(List<Map<String, dynamic>> users);
@@ -407,6 +409,53 @@ class SyncLocalDataSourceImpl implements SyncLocalDataSource {
       }
     });
   }
+  @override
+  Future<void> syncSellerSales(List<Map<String, dynamic>> sellerSales) async {
+    final db = await dbHelper.database;
+    await db.transaction((txn) async {
+      for (final raw in sellerSales) {
+        try {
+          final id = (raw['id'] ?? '').toString();
+          if (id.isEmpty) continue;
+          final usuarioId = (raw['usuario_id'] ?? '').toString();
+          final vendedorNombre = (raw['vendedor_nombre'] ?? '').toString();
+          final clienteNombre = (raw['cliente_nombre'] ?? raw['customer_name'] ?? 'Cliente Mostrador').toString();
+          final fechaVenta = (raw['fecha_venta'] ?? raw['created_at'] ?? DateTime.now().toIso8601String()).toString();
+          final totalCobrado = ((raw['total_cobrado'] ?? raw['total'] ?? 0) as num).toDouble();
+          final metodoPago = (raw['metodo_pago'] ?? raw['payment_method'] ?? 'EFECTIVO').toString();
+          final status = (raw['status']?.toString() ?? 'COMPLETED').toUpperCase();
+          final isLocked = (raw['is_locked'] == 1 || raw['is_locked'] == true) ? 1 : 0;
+
+          dynamic rawItems = raw['items'];
+          String itemsJson = '[]';
+          if (rawItems is String) {
+            itemsJson = rawItems;
+          } else if (rawItems is List) {
+            itemsJson = jsonEncode(rawItems);
+          }
+
+          await txn.insert(
+            'ventas_vendedor',
+            {
+              'id': id,
+              'usuario_id': usuarioId,
+              'vendedor_nombre': vendedorNombre,
+              'cliente_nombre': clienteNombre,
+              'fecha_venta': fechaVenta,
+              'total_cobrado': totalCobrado,
+              'metodo_pago': metodoPago,
+              'status': status,
+              'is_locked': isLocked,
+              'items': itemsJson,
+              'created_at': fechaVenta,
+            },
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        } catch (_) {}
+      }
+    });
+  }
+
   @override
   Future<void> syncUsers(List<Map<String, dynamic>> users) async {
     final db = await dbHelper.database;

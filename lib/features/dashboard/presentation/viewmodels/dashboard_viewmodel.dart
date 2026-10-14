@@ -93,9 +93,11 @@ class DashboardViewModel extends ChangeNotifier {
   }
 
   void _initSyncListener() {
-    // Listen to sales and lots events: sales affect revenue metrics, lots affect Capital Inmovilizado.
+    // Listen to sales, lots, and ventas_vendedor events:
+    // sales affect warehouse revenue metrics, lots affect Capital Inmovilizado,
+    // ventas_vendedor affects seller store sales.
     _syncSubscription = syncManager?.onSyncCompleted
-        .where((event) => event.table == 'sales' || event.table == 'lots')
+        .where((event) => event.table == 'sales' || event.table == 'lots' || event.table == 'ventas_vendedor')
         .listen((_) {
       if (_activeSellerUsuarioId != null && _activeSellerUsuarioId!.isNotEmpty) {
         loadSellerDashboardData(_activeSellerUsuarioId!);
@@ -159,6 +161,13 @@ class DashboardViewModel extends ChangeNotifier {
       case AdminDashboardFilter.porVendedor:
         filterOrigen = 'TIENDA';
         filterUsuarioId = _selectedSellerPhone;
+        if (syncManager != null) {
+          try {
+            await syncManager!.fetchSellerSalesOnDemand(sellerPhone: _selectedSellerPhone);
+          } catch (e) {
+            debugPrint('Error en auditoría bajo demanda de seller_sales: $e');
+          }
+        }
         break;
     }
 
@@ -281,3 +290,6 @@ class DashboardViewModel extends ChangeNotifier {
     await loadAuditForDate(newDate, sellerUsuarioId: sellerUsuarioId);
   }
 }
+
+/// Compatibility typedef for seller-specific dashboard view model references.
+typedef SellerDashboardViewModel = DashboardViewModel;

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -102,6 +103,21 @@ void main() {
                 usuario_id TEXT,
                 origen_venta TEXT DEFAULT 'ALMACEN',
                 store_location TEXT DEFAULT 'ALMACEN'
+            );
+          ''');
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS ventas_vendedor (
+                id TEXT PRIMARY KEY,
+                usuario_id TEXT NOT NULL,
+                vendedor_nombre TEXT,
+                cliente_nombre TEXT,
+                fecha_venta TEXT NOT NULL,
+                total_cobrado REAL NOT NULL,
+                metodo_pago TEXT NOT NULL,
+                status TEXT DEFAULT 'COMPLETED',
+                is_locked INTEGER DEFAULT 1,
+                items TEXT,
+                created_at TEXT DEFAULT (datetime('now'))
             );
           ''');
           await db.execute('''
@@ -328,38 +344,27 @@ void main() {
       when(() => mockAuth.isAdmin).thenReturn(false);
       when(() => mockAuth.isSeller).thenReturn(true);
 
-      // Insert seller's sale (TIENDA)
+      // Insert seller's sale (TIENDA) into independent ventas_vendedor table
       final now = DateTime.now();
       await tester.runAsync(() async {
-        await db.insert('ventas', {
+        await db.insert('ventas_vendedor', {
           'id': 'sale_seller_1',
+          'usuario_id': '77700011',
+          'vendedor_nombre': 'Carlos Vendedor',
+          'cliente_nombre': 'Cliente Prueba',
+          'fecha_venta': now.toIso8601String(),
           'total_cobrado': 350.0,
           'metodo_pago': 'EFECTIVO',
-          'tipo_entrega': 'TIENDA',
-          'fecha_venta': now.toIso8601String(),
-          'created_at': now.toIso8601String(),
-          'payment_method': 'EFECTIVO',
-          'total': 350.0,
-          'status': 'completed',
-          'usuario_id': '77700011',
-          'origen_venta': 'TIENDA',
-          'store_location': 'TIENDA',
-        });
-
-        await db.insert('sales', {
-          'id': 'sale_seller_1',
-          'total_cobrado': 350.0,
-          'metodo_pago': 'EFECTIVO',
-          'tipo_entrega': 'TIENDA',
-          'delivery_method': 'TIENDA',
-          'fecha_venta': now.toIso8601String(),
-          'created_at': now.toIso8601String(),
-          'payment_method': 'EFECTIVO',
-          'total': 350.0,
-          'status': 'completed',
-          'usuario_id': '77700011',
-          'origen_venta': 'TIENDA',
-          'store_location': 'TIENDA',
+          'status': 'COMPLETED',
+          'is_locked': 1,
+          'items': jsonEncode([
+            {
+              'product_id': 'prod_1',
+              'product_name': 'Producto 1',
+              'cantidad': 1,
+              'precio_unitario': 350.0,
+            }
+          ]),
         });
 
         // Insert another sale from warehouse (ALMACEN) - should not appear in seller dashboard

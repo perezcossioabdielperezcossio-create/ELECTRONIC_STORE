@@ -7,6 +7,7 @@ import '../viewmodels/inventory_viewmodel.dart';
 import '../widgets/product_card.dart';
 import 'add_product_lot_sheet.dart';
 import 'receive_stock_sheet.dart';
+import 'admin_store_inventory_screen.dart';
 
 class InventoryCatalogScreen extends StatefulWidget {
   final InventoryViewModel viewModel;
@@ -36,6 +37,23 @@ class _InventoryCatalogScreenState extends State<InventoryCatalogScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(isAdmin ? 'Catálogo de Inventario' : 'Catálogo de Productos'),
+        actions: [
+          if (isAdmin)
+            IconButton(
+              key: const Key('admin_store_inventory_button'),
+              icon: const Icon(Icons.storefront_outlined),
+              tooltip: 'Inventario Tienda / Transferencias',
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => AdminStoreInventoryScreen(
+                      viewModel: widget.viewModel,
+                    ),
+                  ),
+                );
+              },
+            ),
+        ],
         bottom: PreferredSize(
           preferredSize: Size.fromHeight(isAdmin ? 130.0 : 65.0),
           child: Padding(

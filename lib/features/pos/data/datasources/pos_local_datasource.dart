@@ -42,24 +42,59 @@ class PosLocalDatasourceImpl implements PosLocalDatasource {
   Future<void> saveSale(SaleModel model) async {
     final db = await dbHelper.database;
     await db.transaction((txn) async {
-      await _safeInsert(txn, 'sales', model.toSqliteSalesMap());
-      await _safeInsert(txn, 'ventas', model.toSqliteVentasMap());
+      final isSeller = (model.origenVenta.isNotEmpty ? model.origenVenta : model.storeLocation).toUpperCase().trim() == 'TIENDA';
+      if (isSeller) {
+        String sellerName = model.vendedorNombre ?? '';
+        if (sellerName.isEmpty && model.usuarioId != null && model.usuarioId!.isNotEmpty) {
+          try {
+            final userRows = await txn.query('users', where: 'celular = ?', whereArgs: [model.usuarioId], limit: 1);
+            if (userRows.isNotEmpty) {
+              sellerName = (userRows.first['nombre'] as String?) ?? '';
+            }
+          } catch (_) {}
+        }
+        final sellerSale = model.copyWith(vendedorNombre: sellerName);
+        final sellerModel = SaleModel.fromEntity(sellerSale);
 
-      await txn.insert('sync_queue', {
-        'id': const Uuid().v4(),
-        'table_name': 'sales',
-        'operation': 'CREATE',
-        'payload': jsonEncode(model.toMap()),
-        'created_at': DateTime.now().toUtc().toIso8601String(),
-        'status': 'PENDING',
-        'retry_count': 0,
-      });
+        await _safeInsert(txn, 'ventas_vendedor', sellerModel.toSqliteVentasVendedorMap());
+
+        await txn.insert('sync_queue', {
+          'id': const Uuid().v4(),
+          'table_name': 'ventas_vendedor',
+          'operation': 'CREATE',
+          'payload': jsonEncode(sellerModel.toSellerSaleFirestoreMap()),
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+          'status': 'PENDING',
+          'retry_count': 0,
+        });
+      } else {
+        final salesMap = Map<String, dynamic>.from(model.toSqliteSalesMap());
+        salesMap['origen_venta'] = 'ALMACEN';
+        final ventasMap = Map<String, dynamic>.from(model.toSqliteVentasMap());
+        ventasMap['origen_venta'] = 'ALMACEN';
+
+        await _safeInsert(txn, 'sales', salesMap);
+        await _safeInsert(txn, 'ventas', ventasMap);
+
+        await txn.insert('sync_queue', {
+          'id': const Uuid().v4(),
+          'table_name': 'sales',
+          'operation': 'CREATE',
+          'payload': jsonEncode(model.toMap()),
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+          'status': 'PENDING',
+          'retry_count': 0,
+        });
+      }
     });
   }
 
   @override
   Future<void> processSale(SaleModel model) async {
     final db = await dbHelper.database;
+    final locUpper = (model.origenVenta.isNotEmpty ? model.origenVenta : model.storeLocation).toUpperCase().trim();
+    final isSeller = locUpper == 'TIENDA';
+
     await db.transaction((txn) async {
       final saleDetails = <SaleDetailModel>[];
       final processedItems = <SaleItem>[];
@@ -72,7 +107,6 @@ class PosLocalDatasourceImpl implements PosLocalDatasource {
         String whereClause = 'product_id = ? AND current_quantity > 0 AND is_active = 1';
         final whereArgs = <dynamic>[item.productId];
 
-        final locUpper = (model.origenVenta.isNotEmpty ? model.origenVenta : model.storeLocation).toUpperCase().trim();
         if (locUpper == 'TIENDA') {
           whereClause += " AND UPPER(COALESCE(location, 'ALMACEN')) = 'TIENDA'";
         } else {
@@ -165,69 +199,123 @@ class PosLocalDatasourceImpl implements PosLocalDatasource {
           'line_discount': item.lineDiscount,
         };
 
-        try {
-          await txn.insert('sale_items', itemMap, conflictAlgorithm: ConflictAlgorithm.replace);
-        } catch (_) {}
+        if (!isSeller) {
+          try {
+            await txn.insert('sale_items', itemMap, conflictAlgorithm: ConflictAlgorithm.replace);
+          } catch (_) {}
+
+          await txn.insert('sync_queue', {
+            'id': const Uuid().v4(),
+            'table_name': 'sale_items',
+            'operation': 'CREATE',
+            'payload': jsonEncode(itemMap),
+            'created_at': DateTime.now().toUtc().toIso8601String(),
+            'status': 'PENDING',
+            'retry_count': 0,
+          });
+        }
+      }
+
+      if (isSeller) {
+        String sellerName = model.vendedorNombre ?? '';
+        if (sellerName.isEmpty && model.usuarioId != null && model.usuarioId!.isNotEmpty) {
+          try {
+            final userRows = await txn.query('users', where: 'celular = ?', whereArgs: [model.usuarioId], limit: 1);
+            if (userRows.isNotEmpty) {
+              sellerName = (userRows.first['nombre'] as String?) ?? '';
+            }
+          } catch (_) {}
+        }
+
+        final fullSale = SaleModel(
+          id: model.id,
+          clienteId: model.clienteId,
+          deliveryId: model.deliveryId,
+          deliveryName: model.deliveryName,
+          items: processedItems,
+          details: saleDetails,
+          createdAt: model.createdAt,
+          discount: model.discount,
+          tax: model.tax,
+          status: SaleStatus.completed,
+          promoterId: model.promoterId,
+          notes: model.notes,
+          paymentMethod: model.paymentMethod,
+          deliveryMethod: model.deliveryMethod,
+          deliveryFee: model.deliveryFee,
+          customerName: model.customerName,
+          customerPhone: model.customerPhone,
+          isLocked: true,
+          storeLocation: 'TIENDA',
+          usuarioId: model.usuarioId,
+          vendedorNombre: sellerName,
+        );
+
+        await _safeInsert(txn, 'ventas_vendedor', fullSale.toSqliteVentasVendedorMap());
 
         await txn.insert('sync_queue', {
           'id': const Uuid().v4(),
-          'table_name': 'sale_items',
+          'table_name': 'ventas_vendedor',
           'operation': 'CREATE',
-          'payload': jsonEncode(itemMap),
+          'payload': jsonEncode(fullSale.toSellerSaleFirestoreMap()),
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+          'status': 'PENDING',
+          'retry_count': 0,
+        });
+      } else {
+        // Central Warehouse / Admin sale
+        final salesMap = Map<String, dynamic>.from(model.toSqliteSalesMap());
+        salesMap['status'] = 'COMPLETED';
+        salesMap['is_locked'] = 1;
+        salesMap['origen_venta'] = 'ALMACEN';
+
+        final ventasMap = Map<String, dynamic>.from(model.toSqliteVentasMap());
+        ventasMap['status'] = 'COMPLETED';
+        ventasMap['is_locked'] = 1;
+        ventasMap['origen_venta'] = 'ALMACEN';
+
+        await _safeInsert(txn, 'sales', salesMap);
+        await _safeInsert(txn, 'ventas', ventasMap);
+
+        final fullSale = SaleModel(
+          id: model.id,
+          clienteId: model.clienteId,
+          deliveryId: model.deliveryId,
+          deliveryName: model.deliveryName,
+          items: processedItems,
+          details: saleDetails,
+          createdAt: model.createdAt,
+          discount: model.discount,
+          tax: model.tax,
+          status: SaleStatus.completed,
+          promoterId: model.promoterId,
+          notes: model.notes,
+          paymentMethod: model.paymentMethod,
+          deliveryMethod: model.deliveryMethod,
+          deliveryFee: model.deliveryFee,
+          customerName: model.customerName,
+          customerPhone: model.customerPhone,
+          isLocked: true,
+          storeLocation: 'ALMACEN',
+          usuarioId: model.usuarioId,
+          vendedorNombre: model.vendedorNombre,
+        );
+
+        final payloadMap = fullSale.toMap();
+        payloadMap['status'] = 'COMPLETED';
+        payloadMap['is_locked'] = true;
+        payloadMap['origen_venta'] = 'ALMACEN';
+
+        await txn.insert('sync_queue', {
+          'id': const Uuid().v4(),
+          'table_name': 'sales',
+          'operation': 'CREATE',
+          'payload': jsonEncode(payloadMap),
           'created_at': DateTime.now().toUtc().toIso8601String(),
           'status': 'PENDING',
           'retry_count': 0,
         });
       }
-
-      // Save sale in sales & ventas
-      final salesMap = Map<String, dynamic>.from(model.toSqliteSalesMap());
-      salesMap['status'] = 'COMPLETED';
-      salesMap['is_locked'] = 1;
-
-      final ventasMap = Map<String, dynamic>.from(model.toSqliteVentasMap());
-      ventasMap['status'] = 'COMPLETED';
-      ventasMap['is_locked'] = 1;
-
-      await _safeInsert(txn, 'sales', salesMap);
-      await _safeInsert(txn, 'ventas', ventasMap);
-
-      final fullSale = SaleModel(
-        id: model.id,
-        clienteId: model.clienteId,
-        deliveryId: model.deliveryId,
-        deliveryName: model.deliveryName,
-        items: processedItems,
-        details: saleDetails,
-        createdAt: model.createdAt,
-        discount: model.discount,
-        tax: model.tax,
-        status: SaleStatus.completed,
-        promoterId: model.promoterId,
-        notes: model.notes,
-        paymentMethod: model.paymentMethod,
-        deliveryMethod: model.deliveryMethod,
-        deliveryFee: model.deliveryFee,
-        customerName: model.customerName,
-        customerPhone: model.customerPhone,
-        isLocked: true,
-        storeLocation: model.storeLocation,
-        usuarioId: model.usuarioId,
-      );
-
-      final payloadMap = fullSale.toMap();
-      payloadMap['status'] = 'COMPLETED';
-      payloadMap['is_locked'] = true;
-
-      await txn.insert('sync_queue', {
-        'id': const Uuid().v4(),
-        'table_name': 'sales',
-        'operation': 'CREATE',
-        'payload': jsonEncode(payloadMap),
-        'created_at': DateTime.now().toUtc().toIso8601String(),
-        'status': 'PENDING',
-        'retry_count': 0,
-      });
     });
   }
 
@@ -240,6 +328,30 @@ class PosLocalDatasourceImpl implements PosLocalDatasource {
     } catch (_) {}
     if (maps.isEmpty) {
       maps = await db.query('sales', where: 'id = ?', whereArgs: [id]);
+    }
+    if (maps.isEmpty) {
+      try {
+        maps = await db.query('ventas_vendedor', where: 'id = ?', whereArgs: [id]);
+        if (maps.isNotEmpty) {
+          final m = maps.first;
+          List<SaleItem> sellerItems = [];
+          final rawItems = m['items'];
+          if (rawItems is String) {
+            try {
+              final decoded = jsonDecode(rawItems);
+              if (decoded is List) {
+                sellerItems = decoded.map((i) => SaleItem(
+                  productId: (i['product_id'] ?? '').toString(),
+                  productName: (i['product_name'] ?? '').toString(),
+                  quantity: (i['cantidad'] as num?)?.toInt() ?? 1,
+                  unitPrice: (i['precio_unitario'] as num?)?.toDouble() ?? 0.0,
+                )).toList();
+              }
+            } catch (_) {}
+          }
+          return SaleModel.fromMap(m, items: sellerItems);
+        }
+      } catch (_) {}
     }
     if (maps.isEmpty) {
       throw Exception('Sale not found: $id');
@@ -334,22 +446,36 @@ class PosLocalDatasourceImpl implements PosLocalDatasource {
   Future<void> voidSale(String id) async {
     final db = await dbHelper.database;
     await db.transaction((txn) async {
-      try {
-        await txn.update('sales', {'status': 'voided'}, where: 'id = ?', whereArgs: [id]);
-      } catch (_) {}
-      try {
-        await txn.update('ventas', {'status': 'voided'}, where: 'id = ?', whereArgs: [id]);
-      } catch (_) {}
+      final vv = await txn.query('ventas_vendedor', where: 'id = ?', whereArgs: [id]);
+      if (vv.isNotEmpty) {
+        await txn.update('ventas_vendedor', {'status': 'voided'}, where: 'id = ?', whereArgs: [id]);
+        await txn.insert('sync_queue', {
+          'id': const Uuid().v4(),
+          'table_name': 'ventas_vendedor',
+          'operation': 'UPDATE',
+          'payload': jsonEncode({'id': id, 'status': 'voided'}),
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+          'status': 'PENDING',
+          'retry_count': 0,
+        });
+      } else {
+        try {
+          await txn.update('sales', {'status': 'voided'}, where: 'id = ?', whereArgs: [id]);
+        } catch (_) {}
+        try {
+          await txn.update('ventas', {'status': 'voided'}, where: 'id = ?', whereArgs: [id]);
+        } catch (_) {}
 
-      await txn.insert('sync_queue', {
-        'id': const Uuid().v4(),
-        'table_name': 'sales',
-        'operation': 'UPDATE',
-        'payload': jsonEncode({'id': id, 'status': 'voided'}),
-        'created_at': DateTime.now().toUtc().toIso8601String(),
-        'status': 'PENDING',
-        'retry_count': 0,
-      });
+        await txn.insert('sync_queue', {
+          'id': const Uuid().v4(),
+          'table_name': 'sales',
+          'operation': 'UPDATE',
+          'payload': jsonEncode({'id': id, 'status': 'voided'}),
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+          'status': 'PENDING',
+          'retry_count': 0,
+        });
+      }
     });
   }
 }

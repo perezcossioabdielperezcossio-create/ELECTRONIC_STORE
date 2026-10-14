@@ -119,5 +119,21 @@ class DatabaseHelper {
         activo INTEGER NOT NULL DEFAULT 1
       );
     ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS ventas_vendedor (
+        id TEXT PRIMARY KEY,
+        usuario_id TEXT NOT NULL,
+        vendedor_nombre TEXT,
+        cliente_nombre TEXT,
+        fecha_venta TEXT NOT NULL,
+        total_cobrado REAL NOT NULL,
+        metodo_pago TEXT NOT NULL,
+        status TEXT DEFAULT 'COMPLETED',
+        is_locked INTEGER DEFAULT 1,
+        items TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      );
+    ''');
   }
 }

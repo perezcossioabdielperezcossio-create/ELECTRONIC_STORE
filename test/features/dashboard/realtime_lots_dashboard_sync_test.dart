@@ -71,6 +71,12 @@ class FakeRemoteSyncDataSource implements RemoteSyncDataSource {
   @override
   Stream<List<Map<String, dynamic>>> listenToRemoteInventoryChanges() => productsController.stream;
 
+  @override
+  Stream<List<Map<String, dynamic>>> listenToSellerSales(String sellerPhone) => const Stream.empty();
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchSellerSales({String? sellerPhone}) async => [];
+
   void dispose() {
     productsController.close();
     lotsController.close();

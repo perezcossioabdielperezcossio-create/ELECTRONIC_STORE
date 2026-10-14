@@ -23,8 +23,12 @@ class SyncManager extends ChangeNotifier {
   StreamSubscription<List<Map<String, dynamic>>>? _remoteClientsSubscription;
   StreamSubscription<List<Map<String, dynamic>>>? _remoteDeliveriesSubscription;
   StreamSubscription<List<Map<String, dynamic>>>? _remoteUsersSubscription;
+  StreamSubscription<List<Map<String, dynamic>>>? _remoteSellerSalesSubscription;
   final StreamController<void> _remoteDataChangedController = StreamController<void>.broadcast();
   final StreamController<SyncCompletedEvent> _syncEventsController = StreamController<SyncCompletedEvent>.broadcast();
+
+  String? _currentUserRole;
+  String? _currentUserCelular;
 
   bool _isSyncing = false;
   bool _isOnline = true; // Will be updated by connectivity_plus
@@ -43,11 +47,46 @@ class SyncManager extends ChangeNotifier {
     _refreshPendingCount();
   }
 
-  /// Start real-time Firestore listeners for products, lots, sales, clients, and deliveries (Live 2-Device Sync)
+  /// Configures real-time synchronization according to the logged-in user role
+  void configureUserSync({required String role, required String celular}) {
+    _currentUserRole = role.toLowerCase().trim();
+    _currentUserCelular = celular.trim();
+    _configureRoleSalesSubscription();
+  }
+
+  void _configureRoleSalesSubscription() {
+    _remoteSalesSubscription?.cancel();
+    _remoteSalesSubscription = null;
+    _remoteSellerSalesSubscription?.cancel();
+    _remoteSellerSalesSubscription = null;
+
+    final isSeller = _currentUserRole == 'seller';
+
+    if (isSeller && _currentUserCelular != null && _currentUserCelular!.isNotEmpty) {
+      // Regla 3: Si el usuario logueado es seller:
+      // Escucha en vivo únicamente seller_sales con where('usuario_id', isEqualTo: currentUser.celular)
+      _remoteSellerSalesSubscription = remoteDataSource.listenToSellerSales(_currentUserCelular!).listen((sellerSales) async {
+        await localDataSource.syncSellerSales(sellerSales);
+        _remoteDataChangedController.add(null);
+        _syncEventsController.add(const SyncCompletedEvent('ventas_vendedor'));
+        notifyListeners();
+      });
+    } else {
+      // Regla 3: Si el usuario logueado es admin:
+      // Escucha sales para su almacén.
+      _remoteSalesSubscription = remoteDataSource.listenToRemoteSales().listen((sales) async {
+        await localDataSource.syncSales(sales);
+        _remoteDataChangedController.add(null);
+        _syncEventsController.add(const SyncCompletedEvent('sales'));
+        notifyListeners();
+      });
+    }
+  }
+
+  /// Start real-time Firestore listeners (Live 2-Device Sync)
   void startRealtimeSync() {
     _remoteProductsSubscription?.cancel();
     _remoteLotsSubscription?.cancel();
-    _remoteSalesSubscription?.cancel();
     _remoteClientsSubscription?.cancel();
     _remoteDeliveriesSubscription?.cancel();
     _remoteUsersSubscription?.cancel();
@@ -63,13 +102,6 @@ class SyncManager extends ChangeNotifier {
       await localDataSource.syncLots(lots);
       _remoteDataChangedController.add(null);
       _syncEventsController.add(const SyncCompletedEvent('lots'));
-      notifyListeners();
-    });
-
-    _remoteSalesSubscription = remoteDataSource.listenToRemoteSales().listen((sales) async {
-      await localDataSource.syncSales(sales);
-      _remoteDataChangedController.add(null);
-      _syncEventsController.add(const SyncCompletedEvent('sales'));
       notifyListeners();
     });
 
@@ -94,7 +126,19 @@ class SyncManager extends ChangeNotifier {
       notifyListeners();
     });
 
+    _configureRoleSalesSubscription();
+
     syncPendingOperations();
+  }
+
+  /// Consulta bajo demanda de seller_sales para el Administrador (ej. Auditoría de Tiendas)
+  Future<int> fetchSellerSalesOnDemand({String? sellerPhone}) async {
+    final docs = await remoteDataSource.fetchSellerSales(sellerPhone: sellerPhone);
+    await localDataSource.syncSellerSales(docs);
+    _remoteDataChangedController.add(null);
+    _syncEventsController.add(const SyncCompletedEvent('ventas_vendedor'));
+    notifyListeners();
+    return docs.length;
   }
 
   void initialize() {
@@ -124,6 +168,7 @@ class SyncManager extends ChangeNotifier {
     _remoteProductsSubscription?.cancel();
     _remoteLotsSubscription?.cancel();
     _remoteSalesSubscription?.cancel();
+    _remoteSellerSalesSubscription?.cancel();
     _remoteClientsSubscription?.cancel();
     _remoteDeliveriesSubscription?.cancel();
     _remoteUsersSubscription?.cancel();

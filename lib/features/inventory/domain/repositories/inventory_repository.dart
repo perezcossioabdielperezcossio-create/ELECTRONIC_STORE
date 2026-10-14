@@ -28,4 +28,15 @@ abstract class InventoryRepository {
   Future<Either<Failure, Unit>> deleteLot(String lotId);
   Future<Either<Failure, List<Lot>>> consumeStock(String productId, int quantity, {String? location});
   Future<Either<Failure, List<Product>>> getAllProducts();
+  Future<Either<Failure, Unit>> transferStockToStore({
+    required String productId,
+    required int quantity,
+    String? sellerId,
+    String? storeLocation,
+  });
+  Future<Either<Failure, Unit>> revertOrAdjustStoreStock({
+    String? lotId,
+    String? productId,
+    int? newQuantity,
+  });
 }

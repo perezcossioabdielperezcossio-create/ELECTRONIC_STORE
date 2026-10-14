@@ -108,4 +108,42 @@ class InventoryRepositoryImpl implements InventoryRepository {
       return Left(DatabaseFailure('Error deleting lot: $e'));
     }
   }
+
+  @override
+  Future<Either<Failure, Unit>> transferStockToStore({
+    required String productId,
+    required int quantity,
+    String? sellerId,
+    String? storeLocation,
+  }) async {
+    try {
+      await localDataSource.transferStockToStore(
+        productId: productId,
+        quantity: quantity,
+        sellerId: sellerId,
+        storeLocation: storeLocation,
+      );
+      return const Right(unit);
+    } catch (e) {
+      return Left(DatabaseFailure(e.toString().replaceAll('Exception: ', '')));
+    }
+  }
+
+  @override
+  Future<Either<Failure, Unit>> revertOrAdjustStoreStock({
+    String? lotId,
+    String? productId,
+    int? newQuantity,
+  }) async {
+    try {
+      await localDataSource.revertOrAdjustStoreStock(
+        lotId: lotId,
+        productId: productId,
+        newQuantity: newQuantity,
+      );
+      return const Right(unit);
+    } catch (e) {
+      return Left(DatabaseFailure(e.toString().replaceAll('Exception: ', '')));
+    }
+  }
 }

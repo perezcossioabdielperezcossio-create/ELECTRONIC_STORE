@@ -65,6 +65,8 @@ class FirestoreRemoteDataSource implements RemoteSyncDataSource {
         } else {
           payloadMap['status'] = 'COMPLETED';
           payloadMap['is_locked'] = true;
+          payloadMap['origen_venta'] = 'ALMACEN';
+          payloadMap['store_location'] = 'ALMACEN';
           final sale = SaleModel.fromMap(payloadMap);
           final rawDetails = payloadMap['sale_details'] ?? payloadMap['items'];
           final details = <SaleDetailModel>[];
@@ -76,6 +78,13 @@ class FirestoreRemoteDataSource implements RemoteSyncDataSource {
             }
           }
           await saveSaleTransaction(sale, details);
+        }
+      } else if (operation.tableName == 'ventas_vendedor' || operation.tableName == 'seller_sales') {
+        final saleId = (payloadMap['id'] as String?) ?? operation.id;
+        if (operation.operation == 'DELETE') {
+          await firestore.collection('seller_sales').doc(saleId).delete();
+        } else {
+          await saveSellerSale(payloadMap, saleId);
         }
       } else if (operation.tableName == 'sale_items' || operation.tableName == 'detalle_ventas') {
         // Individual item or detail
@@ -129,6 +138,56 @@ class FirestoreRemoteDataSource implements RemoteSyncDataSource {
     }
     
     await docRef.set(saleMap, SetOptions(merge: true));
+  }
+
+  /// Guarda una venta de vendedor en la colección independiente 'seller_sales'
+  Future<void> saveSellerSale(Map<String, dynamic> payloadMap, String saleId) async {
+    final docRef = firestore.collection('seller_sales').doc(saleId);
+
+    // Process items ensuring exact requested schema
+    dynamic rawItems = payloadMap['items'];
+    if (rawItems is String) {
+      try {
+        rawItems = jsonDecode(rawItems);
+      } catch (_) {
+        rawItems = [];
+      }
+    }
+    final itemsList = <Map<String, dynamic>>[];
+    if (rawItems is List) {
+      for (final i in rawItems) {
+        if (i is Map) {
+          itemsList.add({
+            'product_id': (i['product_id'] ?? '').toString(),
+            'product_name': (i['product_name'] ?? '').toString(),
+            'cantidad': (i['cantidad'] as num?)?.toInt() ?? (i['quantity'] as num?)?.toInt() ?? 1,
+            'precio_unitario': (i['precio_unitario'] as num?)?.toDouble() ?? (i['unit_price'] as num?)?.toDouble() ?? 0.0,
+          });
+        }
+      }
+    }
+
+    final sellerDoc = <String, dynamic>{
+      'id': saleId,
+      'usuario_id': (payloadMap['usuario_id'] ?? '').toString(),
+      'vendedor_nombre': (payloadMap['vendedor_nombre'] ?? '').toString(),
+      'cliente_nombre': (payloadMap['cliente_nombre'] ?? payloadMap['customer_name'] ?? 'Cliente Mostrador').toString(),
+      'fecha_venta': (payloadMap['fecha_venta'] ?? payloadMap['created_at'] ?? DateTime.now().toIso8601String()).toString(),
+      'total_cobrado': ((payloadMap['total_cobrado'] ?? payloadMap['total'] ?? 0) as num).toDouble(),
+      'metodo_pago': (payloadMap['metodo_pago'] ?? payloadMap['payment_method'] ?? 'EFECTIVO').toString(),
+      'status': (payloadMap['status'] ?? 'COMPLETED').toString(),
+      'is_locked': 1,
+      'items': itemsList,
+    };
+
+    if (payloadMap['clientTimestamp'] != null) {
+      sellerDoc['clientTimestamp'] = payloadMap['clientTimestamp'];
+    }
+    if (payloadMap['lastModified'] != null) {
+      sellerDoc['lastModified'] = payloadMap['lastModified'];
+    }
+
+    await docRef.set(sellerDoc, SetOptions(merge: true));
   }
 
   Future<void> deleteProduct(String sku) async {
@@ -269,5 +328,36 @@ class FirestoreRemoteDataSource implements RemoteSyncDataSource {
   @override
   Stream<List<Map<String, dynamic>>> listenToRemoteInventoryChanges() {
     return listenToRemoteProducts();
+  }
+
+  /// Listen to remote changes for Seller Sales (isolated collection 'seller_sales')
+  @override
+  Stream<List<Map<String, dynamic>>> listenToSellerSales(String sellerPhone) {
+    return firestore
+        .collection('seller_sales')
+        .where('usuario_id', isEqualTo: sellerPhone)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) {
+        final data = Map<String, dynamic>.from(doc.data());
+        data['id'] ??= doc.id;
+        return data;
+      }).toList();
+    });
+  }
+
+  /// Fetch seller sales on-demand (e.g. for Admin Store Audit)
+  @override
+  Future<List<Map<String, dynamic>>> fetchSellerSales({String? sellerPhone}) async {
+    Query<Map<String, dynamic>> query = firestore.collection('seller_sales');
+    if (sellerPhone != null && sellerPhone.isNotEmpty) {
+      query = query.where('usuario_id', isEqualTo: sellerPhone);
+    }
+    final snapshot = await query.get();
+    return snapshot.docs.map((doc) {
+      final data = Map<String, dynamic>.from(doc.data());
+      data['id'] ??= doc.id;
+      return data;
+    }).toList();
   }
 }

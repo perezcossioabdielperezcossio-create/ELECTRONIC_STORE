@@ -514,7 +514,7 @@ class PosViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> checkout({String? promoterId, String? storeLocation, String? usuarioId}) async {
+  Future<bool> checkout({String? promoterId, String? storeLocation, String? usuarioId, String? vendedorNombre}) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -546,6 +546,7 @@ class PosViewModel extends ChangeNotifier {
       discount:       _globalDiscount,
       storeLocation:  targetLocation,
       usuarioId:      usuarioId,
+      vendedorNombre: vendedorNombre,
       status:         SaleStatus.completed,
       isLocked:       true,
     );

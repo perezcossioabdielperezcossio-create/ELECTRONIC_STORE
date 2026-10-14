@@ -5,6 +5,8 @@ import '../viewmodels/dashboard_viewmodel.dart';
 import 'package:electronic_store/core/sync/domain/services/sync_manager.dart';
 import '../../data/models/financial_metrics_model.dart';
 import '../../../pos/domain/entities/sale.dart';
+import '../../../inventory/presentation/viewmodels/inventory_viewmodel.dart';
+import '../../../inventory/presentation/screens/admin_store_inventory_screen.dart';
 
 class DashboardOverviewView extends StatefulWidget {
   const DashboardOverviewView({super.key});
@@ -32,6 +34,21 @@ class _DashboardOverviewViewState extends State<DashboardOverviewView> {
       appBar: AppBar(
         title: const Text('Dashboard & Historial'),
         actions: [
+          IconButton(
+            key: const Key('dashboard_store_inventory_button'),
+            icon: const Icon(Icons.storefront_outlined),
+            tooltip: 'Gestión Inventario Tienda',
+            onPressed: () {
+              final invVm = context.read<InventoryViewModel>();
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => AdminStoreInventoryScreen(
+                    viewModel: invVm,
+                  ),
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.calendar_today),
             tooltip: 'Filtrar por fecha',

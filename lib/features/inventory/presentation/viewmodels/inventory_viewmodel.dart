@@ -12,6 +12,8 @@ import '../../../../core/usecases/usecase.dart';
 import '../../../../core/sync/domain/services/sync_manager.dart';
 
 import '../../domain/usecases/delete_lot_usecase.dart';
+import '../../domain/usecases/transfer_stock_to_store_usecase.dart';
+import '../../domain/usecases/revert_or_adjust_store_stock_usecase.dart';
 
 enum ViewState { idle, loading, error }
 enum InventoryFilter { all, lowStock, outOfStock }
@@ -24,6 +26,8 @@ class InventoryViewModel extends ChangeNotifier {
   final UpdateProductUseCase updateProductUseCase;
   final DeleteProductUseCase deleteProductUseCase;
   final DeleteLotUseCase? deleteLotUseCase;
+  final TransferStockToStoreUseCase? transferStockToStoreUseCase;
+  final RevertOrAdjustStoreStockUseCase? revertOrAdjustStoreStockUseCase;
   final SyncManager? syncManager;
 
   StreamSubscription? _syncSubscription;
@@ -36,6 +40,8 @@ class InventoryViewModel extends ChangeNotifier {
     required this.updateProductUseCase,
     required this.deleteProductUseCase,
     this.deleteLotUseCase,
+    this.transferStockToStoreUseCase,
+    this.revertOrAdjustStoreStockUseCase,
     this.syncManager,
   }) {
     _initSyncListener();
@@ -191,6 +197,64 @@ class InventoryViewModel extends ChangeNotifier {
   Future<bool> deleteLot(String lotId) async {
     if (deleteLotUseCase == null) return false;
     final result = await deleteLotUseCase!(DeleteLotParams(lotId: lotId));
+    return result.fold(
+      (failure) {
+        _errorMessage = failure.message;
+        notifyListeners();
+        return false;
+      },
+      (_) async {
+        await loadProducts();
+        syncManager?.syncPendingOperations();
+        return true;
+      },
+    );
+  }
+
+  Future<bool> transferStockToStore({
+    required String productId,
+    required int quantity,
+    String? sellerId,
+    String? storeLocation,
+  }) async {
+    if (transferStockToStoreUseCase == null) return false;
+    final result = await transferStockToStoreUseCase!(
+      TransferStockToStoreParams(
+        productId: productId,
+        quantity: quantity,
+        sellerId: sellerId,
+        storeLocation: storeLocation,
+      ),
+    );
+
+    return result.fold(
+      (failure) {
+        _errorMessage = failure.message;
+        notifyListeners();
+        return false;
+      },
+      (_) async {
+        await loadProducts();
+        syncManager?.syncPendingOperations();
+        return true;
+      },
+    );
+  }
+
+  Future<bool> revertOrAdjustStoreStock({
+    String? lotId,
+    String? productId,
+    int? newQuantity,
+  }) async {
+    if (revertOrAdjustStoreStockUseCase == null) return false;
+    final result = await revertOrAdjustStoreStockUseCase!(
+      RevertOrAdjustStoreStockParams(
+        lotId: lotId,
+        productId: productId,
+        newQuantity: newQuantity,
+      ),
+    );
+
     return result.fold(
       (failure) {
         _errorMessage = failure.message;

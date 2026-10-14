@@ -35,6 +35,13 @@ class _HomeShellViewState extends State<HomeShellView> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final syncManager = context.read<SyncManager>();
+      final auth = context.read<AuthViewModel>();
+      if (auth.currentUser != null) {
+        syncManager.configureUserSync(
+          role: auth.currentUser!.role.name,
+          celular: auth.currentUser!.celular,
+        );
+      }
       _remoteSyncSubscription = syncManager.onRemoteDataChanged.listen((_) {
         if (mounted) {
           context.read<InventoryViewModel>().loadProducts();

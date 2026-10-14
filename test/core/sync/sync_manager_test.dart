@@ -45,6 +45,12 @@ class TestRemoteSyncDataSource implements RemoteSyncDataSource {
   Stream<List<Map<String, dynamic>>> listenToRemoteInventoryChanges() {
     return const Stream.empty();
   }
+
+  @override
+  Stream<List<Map<String, dynamic>>> listenToSellerSales(String sellerPhone) => const Stream.empty();
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchSellerSales({String? sellerPhone}) async => [];
 }
 
 class MockDatabaseHelper extends Mock implements DatabaseHelper {}

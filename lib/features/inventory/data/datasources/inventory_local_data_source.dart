@@ -16,6 +16,17 @@ abstract class InventoryLocalDataSource {
   Future<void> deleteLot(String lotId);
   Future<List<LotModel>> consumeStock(String productId, int quantity, {String? location});
   Future<List<ProductModel>> getAllProducts();
+  Future<void> transferStockToStore({
+    required String productId,
+    required int quantity,
+    String? sellerId,
+    String? storeLocation,
+  });
+  Future<void> revertOrAdjustStoreStock({
+    String? lotId,
+    String? productId,
+    int? newQuantity,
+  });
 }
 
 class InventoryLocalDataSourceImpl implements InventoryLocalDataSource {
@@ -388,6 +399,377 @@ class InventoryLocalDataSourceImpl implements InventoryLocalDataSource {
 
     if (remaining > 0) throw Exception('Stock insuficiente');
     return consumed;
+  }
+
+  @override
+  Future<void> transferStockToStore({
+    required String productId,
+    required int quantity,
+    String? sellerId,
+    String? storeLocation,
+  }) async {
+    if (quantity <= 0) {
+      throw Exception('La cantidad a transferir debe ser mayor a 0');
+    }
+
+    final locationDestino = (storeLocation != null && storeLocation.isNotEmpty)
+        ? storeLocation.toUpperCase().trim()
+        : 'TIENDA';
+
+    await database.transaction((txn) async {
+      final maps = await txn.query(
+        'lots',
+        where: "product_id = ? AND current_quantity > 0 AND is_active = 1 AND UPPER(COALESCE(location, 'ALMACEN')) = 'ALMACEN'",
+        whereArgs: [productId],
+        orderBy: 'purchase_date ASC',
+      );
+
+      final warehouseLots = maps.map((m) => LotModel.fromMap(m)).toList();
+      final totalWarehouseStock = warehouseLots.fold<int>(0, (sum, l) => sum + l.currentQuantity);
+
+      if (totalWarehouseStock < quantity) {
+        throw Exception('Stock insuficiente en Almacén Central (Disponible: $totalWarehouseStock, Requerido: $quantity)');
+      }
+
+      final prodQuery = await txn.query('products', where: 'id = ?', whereArgs: [productId], limit: 1);
+      final sku = prodQuery.isNotEmpty ? (prodQuery.first['sku'] as String) : productId;
+
+      var remaining = quantity;
+      for (final lot in warehouseLots) {
+        if (remaining <= 0) break;
+        final take = lot.currentQuantity < remaining ? lot.currentQuantity : remaining;
+        final newAlmQty = lot.currentQuantity - take;
+
+        await txn.update(
+          'lots',
+          {'current_quantity': newAlmQty},
+          where: 'id = ?',
+          whereArgs: [lot.id],
+        );
+
+        await txn.insert('sync_queue', {
+          'id': const Uuid().v4(),
+          'table_name': 'lots',
+          'operation': 'UPDATE',
+          'payload': jsonEncode({'id': lot.id, 'current_quantity': newAlmQty}),
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+          'status': 'PENDING',
+          'retry_count': 0,
+        });
+
+        final storeLot = LotModel(
+          id: const Uuid().v4(),
+          productId: productId,
+          purchaseDate: DateTime.now().toUtc(),
+          initialQuantity: take,
+          currentQuantity: take,
+          realUnitCost: lot.realUnitCost,
+          promoterBasePrice: lot.promoterBasePrice,
+          location: locationDestino,
+        );
+
+        final lotPayload = {
+          'id': storeLot.id,
+          'product_id': productId,
+          'productSku': sku,
+          'productId': productId,
+          'costo_unitario_real': storeLot.realUnitCost,
+          'real_unit_cost': storeLot.realUnitCost,
+          'cantidad_actual': storeLot.currentQuantity,
+          'current_quantity': storeLot.currentQuantity,
+          'cantidad_inicial': storeLot.initialQuantity,
+          'initial_quantity': storeLot.initialQuantity,
+          'fecha_ingreso': storeLot.purchaseDate.toIso8601String(),
+          'purchase_date': storeLot.purchaseDate.toIso8601String(),
+          'location': storeLot.location,
+          'ubicacion': storeLot.location,
+          if (storeLot.promoterBasePrice != null) 'promoter_base_price': storeLot.promoterBasePrice,
+          'is_active': 1,
+        };
+
+        await txn.insert(
+          'lots',
+          storeLot.toSqliteMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+
+        await txn.insert('sync_queue', {
+          'id': const Uuid().v4(),
+          'table_name': 'lots',
+          'operation': 'CREATE',
+          'payload': jsonEncode(lotPayload),
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+          'status': 'PENDING',
+          'retry_count': 0,
+        });
+
+        remaining -= take;
+      }
+    });
+  }
+
+  @override
+  Future<void> revertOrAdjustStoreStock({
+    String? lotId,
+    String? productId,
+    int? newQuantity,
+  }) async {
+    await database.transaction((txn) async {
+      if (lotId != null && lotId.isNotEmpty) {
+        final lotQuery = await txn.query('lots', where: 'id = ?', whereArgs: [lotId], limit: 1);
+        if (lotQuery.isEmpty) return;
+        final tiendaLot = LotModel.fromMap(lotQuery.first);
+        final prodId = tiendaLot.productId;
+
+        if (newQuantity == null || newQuantity <= 0) {
+          final returnQty = tiendaLot.currentQuantity;
+          if (returnQty > 0) {
+            await _returnStockToWarehouse(txn, prodId, returnQty, tiendaLot.realUnitCost);
+          }
+          await txn.delete('lots', where: 'id = ?', whereArgs: [lotId]);
+          await txn.insert('sync_queue', {
+            'id': const Uuid().v4(),
+            'table_name': 'lots',
+            'operation': 'DELETE',
+            'payload': jsonEncode({'id': lotId}),
+            'created_at': DateTime.now().toUtc().toIso8601String(),
+            'status': 'PENDING',
+            'retry_count': 0,
+          });
+        } else {
+          final diff = tiendaLot.currentQuantity - newQuantity;
+          if (diff > 0) {
+            await _returnStockToWarehouse(txn, prodId, diff, tiendaLot.realUnitCost);
+            await txn.update(
+              'lots',
+              {'current_quantity': newQuantity},
+              where: 'id = ?',
+              whereArgs: [lotId],
+            );
+            await txn.insert('sync_queue', {
+              'id': const Uuid().v4(),
+              'table_name': 'lots',
+              'operation': 'UPDATE',
+              'payload': jsonEncode({'id': lotId, 'current_quantity': newQuantity}),
+              'created_at': DateTime.now().toUtc().toIso8601String(),
+              'status': 'PENDING',
+              'retry_count': 0,
+            });
+          } else if (diff < 0) {
+            final extraNeeded = -diff;
+            final almQuery = await txn.query(
+              'lots',
+              where: "product_id = ? AND current_quantity > 0 AND is_active = 1 AND UPPER(COALESCE(location, 'ALMACEN')) = 'ALMACEN'",
+              whereArgs: [prodId],
+              orderBy: 'purchase_date ASC',
+            );
+            final warehouseLots = almQuery.map((m) => LotModel.fromMap(m)).toList();
+            final available = warehouseLots.fold<int>(0, (s, l) => s + l.currentQuantity);
+            if (available < extraNeeded) {
+              throw Exception('Stock insuficiente en Almacén para aumentar la asignación (Disponible: $available, Requerido: $extraNeeded)');
+            }
+            var rem = extraNeeded;
+            for (final almLot in warehouseLots) {
+              if (rem <= 0) break;
+              final take = almLot.currentQuantity < rem ? almLot.currentQuantity : rem;
+              final newAlm = almLot.currentQuantity - take;
+              await txn.update('lots', {'current_quantity': newAlm}, where: 'id = ?', whereArgs: [almLot.id]);
+              await txn.insert('sync_queue', {
+                'id': const Uuid().v4(),
+                'table_name': 'lots',
+                'operation': 'UPDATE',
+                'payload': jsonEncode({'id': almLot.id, 'current_quantity': newAlm}),
+                'created_at': DateTime.now().toUtc().toIso8601String(),
+                'status': 'PENDING',
+                'retry_count': 0,
+              });
+              rem -= take;
+            }
+            final newInit = tiendaLot.initialQuantity < newQuantity ? newQuantity : tiendaLot.initialQuantity;
+            await txn.update(
+              'lots',
+              {'current_quantity': newQuantity, 'initial_quantity': newInit},
+              where: 'id = ?',
+              whereArgs: [lotId],
+            );
+            await txn.insert('sync_queue', {
+              'id': const Uuid().v4(),
+              'table_name': 'lots',
+              'operation': 'UPDATE',
+              'payload': jsonEncode({'id': lotId, 'current_quantity': newQuantity, 'initial_quantity': newInit}),
+              'created_at': DateTime.now().toUtc().toIso8601String(),
+              'status': 'PENDING',
+              'retry_count': 0,
+            });
+          }
+        }
+      } else if (productId != null && productId.isNotEmpty) {
+        final tiendaLotsQuery = await txn.query(
+          'lots',
+          where: "product_id = ? AND UPPER(COALESCE(location, 'ALMACEN')) = 'TIENDA' AND is_active = 1 AND current_quantity > 0",
+          whereArgs: [productId],
+          orderBy: 'purchase_date DESC',
+        );
+        final tiendaLots = tiendaLotsQuery.map((m) => LotModel.fromMap(m)).toList();
+        final currentStoreTotal = tiendaLots.fold<int>(0, (s, l) => s + l.currentQuantity);
+
+        if (newQuantity == null || newQuantity <= 0) {
+          for (final tLot in tiendaLots) {
+            if (tLot.currentQuantity > 0) {
+              await _returnStockToWarehouse(txn, productId, tLot.currentQuantity, tLot.realUnitCost);
+            }
+            await txn.delete('lots', where: 'id = ?', whereArgs: [tLot.id]);
+            await txn.insert('sync_queue', {
+              'id': const Uuid().v4(),
+              'table_name': 'lots',
+              'operation': 'DELETE',
+              'payload': jsonEncode({'id': tLot.id}),
+              'created_at': DateTime.now().toUtc().toIso8601String(),
+              'status': 'PENDING',
+              'retry_count': 0,
+            });
+          }
+        } else {
+          final diff = currentStoreTotal - newQuantity;
+          if (diff > 0) {
+            var remReturn = diff;
+            for (final tLot in tiendaLots) {
+              if (remReturn <= 0) break;
+              final take = tLot.currentQuantity < remReturn ? tLot.currentQuantity : remReturn;
+              await _returnStockToWarehouse(txn, productId, take, tLot.realUnitCost);
+              final updatedQty = tLot.currentQuantity - take;
+              if (updatedQty == 0) {
+                await txn.delete('lots', where: 'id = ?', whereArgs: [tLot.id]);
+                await txn.insert('sync_queue', {
+                  'id': const Uuid().v4(),
+                  'table_name': 'lots',
+                  'operation': 'DELETE',
+                  'payload': jsonEncode({'id': tLot.id}),
+                  'created_at': DateTime.now().toUtc().toIso8601String(),
+                  'status': 'PENDING',
+                  'retry_count': 0,
+                });
+              } else {
+                await txn.update('lots', {'current_quantity': updatedQty}, where: 'id = ?', whereArgs: [tLot.id]);
+                await txn.insert('sync_queue', {
+                  'id': const Uuid().v4(),
+                  'table_name': 'lots',
+                  'operation': 'UPDATE',
+                  'payload': jsonEncode({'id': tLot.id, 'current_quantity': updatedQty}),
+                  'created_at': DateTime.now().toUtc().toIso8601String(),
+                  'status': 'PENDING',
+                  'retry_count': 0,
+                });
+              }
+              remReturn -= take;
+            }
+          } else if (diff < 0) {
+            final extra = -diff;
+            final almQuery = await txn.query(
+              'lots',
+              where: "product_id = ? AND current_quantity > 0 AND is_active = 1 AND UPPER(COALESCE(location, 'ALMACEN')) = 'ALMACEN'",
+              whereArgs: [productId],
+              orderBy: 'purchase_date ASC',
+            );
+            final warehouseLots = almQuery.map((m) => LotModel.fromMap(m)).toList();
+            final available = warehouseLots.fold<int>(0, (s, l) => s + l.currentQuantity);
+            if (available < extra) {
+              throw Exception('Stock insuficiente en Almacén (Disponible: $available, Requerido: $extra)');
+            }
+            var rem = extra;
+            for (final almLot in warehouseLots) {
+              if (rem <= 0) break;
+              final take = almLot.currentQuantity < rem ? almLot.currentQuantity : rem;
+              final newAlm = almLot.currentQuantity - take;
+              await txn.update('lots', {'current_quantity': newAlm}, where: 'id = ?', whereArgs: [almLot.id]);
+              await txn.insert('sync_queue', {
+                'id': const Uuid().v4(),
+                'table_name': 'lots',
+                'operation': 'UPDATE',
+                'payload': jsonEncode({'id': almLot.id, 'current_quantity': newAlm}),
+                'created_at': DateTime.now().toUtc().toIso8601String(),
+                'status': 'PENDING',
+                'retry_count': 0,
+              });
+              final newStoreLot = LotModel(
+                id: const Uuid().v4(),
+                productId: productId,
+                purchaseDate: DateTime.now().toUtc(),
+                initialQuantity: take,
+                currentQuantity: take,
+                realUnitCost: almLot.realUnitCost,
+                promoterBasePrice: almLot.promoterBasePrice,
+                location: 'TIENDA',
+              );
+              await txn.insert('lots', newStoreLot.toSqliteMap());
+              await txn.insert('sync_queue', {
+                'id': const Uuid().v4(),
+                'table_name': 'lots',
+                'operation': 'CREATE',
+                'payload': jsonEncode(newStoreLot.toMap()),
+                'created_at': DateTime.now().toUtc().toIso8601String(),
+                'status': 'PENDING',
+                'retry_count': 0,
+              });
+              rem -= take;
+            }
+          }
+        }
+      }
+    });
+  }
+
+  Future<void> _returnStockToWarehouse(DatabaseExecutor txn, String productId, int qtyToReturn, double realUnitCost) async {
+    final almLotsQuery = await txn.query(
+      'lots',
+      where: "product_id = ? AND UPPER(COALESCE(location, 'ALMACEN')) = 'ALMACEN'",
+      whereArgs: [productId],
+      orderBy: 'purchase_date DESC',
+      limit: 1,
+    );
+
+    if (almLotsQuery.isNotEmpty) {
+      final almLot = LotModel.fromMap(almLotsQuery.first);
+      final newQty = almLot.currentQuantity + qtyToReturn;
+      final newInit = almLot.initialQuantity < newQty ? newQty : almLot.initialQuantity;
+
+      await txn.update(
+        'lots',
+        {'current_quantity': newQty, 'initial_quantity': newInit, 'is_active': 1},
+        where: 'id = ?',
+        whereArgs: [almLot.id],
+      );
+
+      await txn.insert('sync_queue', {
+        'id': const Uuid().v4(),
+        'table_name': 'lots',
+        'operation': 'UPDATE',
+        'payload': jsonEncode({'id': almLot.id, 'current_quantity': newQty, 'initial_quantity': newInit, 'is_active': 1}),
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+        'status': 'PENDING',
+        'retry_count': 0,
+      });
+    } else {
+      final newAlmLot = LotModel(
+        id: const Uuid().v4(),
+        productId: productId,
+        purchaseDate: DateTime.now().toUtc(),
+        initialQuantity: qtyToReturn,
+        currentQuantity: qtyToReturn,
+        realUnitCost: realUnitCost,
+        location: 'ALMACEN',
+      );
+      await txn.insert('lots', newAlmLot.toSqliteMap());
+      await txn.insert('sync_queue', {
+        'id': const Uuid().v4(),
+        'table_name': 'lots',
+        'operation': 'CREATE',
+        'payload': jsonEncode(newAlmLot.toMap()),
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+        'status': 'PENDING',
+        'retry_count': 0,
+      });
+    }
   }
 }
 

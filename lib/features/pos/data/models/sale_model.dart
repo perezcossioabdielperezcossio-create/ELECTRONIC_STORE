@@ -1,3 +1,4 @@
+import 'dart:convert';
 import '../../domain/entities/sale.dart';
 import '../../domain/entities/sale_item.dart';
 import '../../domain/entities/sale_detail.dart';
@@ -25,6 +26,7 @@ class SaleModel extends Sale {
     super.isLocked,
     super.storeLocation = 'ALMACEN',
     super.usuarioId,
+    super.vendedorNombre,
   });
 
   factory SaleModel.fromMap(
@@ -108,6 +110,7 @@ class SaleModel extends Sale {
       isLocked: map['is_locked'] == 1 || map['is_locked'] == true,
       storeLocation: parsedLocation,
       usuarioId: (map['usuario_id'] ?? map['usuarioId'] ?? map['user_id']) as String?,
+      vendedorNombre: (map['vendedor_nombre'] ?? map['vendedorNombre']) as String?,
     );
   }
 
@@ -133,6 +136,7 @@ class SaleModel extends Sale {
       isLocked: sale.isLocked,
       storeLocation: sale.storeLocation,
       usuarioId: sale.usuarioId,
+      vendedorNombre: sale.vendedorNombre,
     );
   }
 
@@ -164,6 +168,7 @@ class SaleModel extends Sale {
         'location': storeLocation,
         'origen_venta': storeLocation,
         'usuario_id': usuarioId,
+        'vendedor_nombre': vendedorNombre,
         'sale_details': details.isNotEmpty
             ? details.map((d) {
                 if (d is SaleDetailModel) return d.toMap();
@@ -205,6 +210,43 @@ class SaleModel extends Sale {
         }).toList(),
       };
 
+  Map<String, dynamic> toSellerSaleFirestoreMap() => {
+        'id': id,
+        'usuario_id': usuarioId ?? '',
+        'vendedor_nombre': vendedorNombre ?? '',
+        'cliente_nombre': customerName ?? 'Cliente Mostrador',
+        'fecha_venta': createdAt.toIso8601String(),
+        'total_cobrado': total,
+        'metodo_pago': paymentMethod,
+        'status': 'COMPLETED',
+        'is_locked': 1,
+        'items': items.map((i) => {
+              'product_id': i.productId,
+              'product_name': i.productName,
+              'cantidad': i.quantity,
+              'precio_unitario': i.unitPrice,
+            }).toList(),
+      };
+
+  Map<String, dynamic> toSqliteVentasVendedorMap() => {
+        'id': id,
+        'usuario_id': usuarioId ?? '',
+        'vendedor_nombre': vendedorNombre ?? '',
+        'cliente_nombre': customerName ?? 'Cliente Mostrador',
+        'fecha_venta': createdAt.toIso8601String(),
+        'total_cobrado': total,
+        'metodo_pago': paymentMethod,
+        'status': 'COMPLETED',
+        'is_locked': 1,
+        'items': jsonEncode(items.map((i) => {
+              'product_id': i.productId,
+              'product_name': i.productName,
+              'cantidad': i.quantity,
+              'precio_unitario': i.unitPrice,
+            }).toList()),
+        'created_at': createdAt.toIso8601String(),
+      };
+
   Map<String, dynamic> toSqliteVentasMap() => {
         'id': id,
         'cliente_id': clienteId,
@@ -228,7 +270,7 @@ class SaleModel extends Sale {
         'promoter_id': promoterId,
         'notes': notes,
         'store_location': storeLocation,
-        'origen_venta': storeLocation,
+        'origen_venta': storeLocation.isNotEmpty ? storeLocation : 'ALMACEN',
         'usuario_id': usuarioId,
       };
 
@@ -255,7 +297,7 @@ class SaleModel extends Sale {
         'notes': notes,
         'is_locked': 1,
         'store_location': storeLocation,
-        'origen_venta': storeLocation,
+        'origen_venta': storeLocation.isNotEmpty ? storeLocation : 'ALMACEN',
         'usuario_id': usuarioId,
       };
 }

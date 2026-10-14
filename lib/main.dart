@@ -45,6 +45,9 @@ import 'features/inventory/domain/usecases/consume_stock_fifo.dart';
 import 'features/inventory/domain/usecases/create_product_with_lot_usecase.dart';
 import 'features/inventory/domain/usecases/update_product_usecase.dart';
 import 'features/inventory/domain/usecases/delete_product_usecase.dart';
+import 'features/inventory/domain/usecases/delete_lot_usecase.dart';
+import 'features/inventory/domain/usecases/transfer_stock_to_store_usecase.dart';
+import 'features/inventory/domain/usecases/revert_or_adjust_store_stock_usecase.dart';
 import 'features/inventory/presentation/viewmodels/inventory_viewmodel.dart';
 
 import 'features/pos/domain/usecases/create_sale.dart';
@@ -62,8 +65,6 @@ import 'features/main/presentation/views/home_shell_view.dart';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-
-import 'features/inventory/domain/usecases/delete_lot_usecase.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -132,6 +133,8 @@ void main() async {
   final updateProductUseCase = UpdateProductUseCase(invRepo);
   final deleteProductUseCase = DeleteProductUseCase(invRepo);
   final deleteLotUseCase = DeleteLotUseCase(invRepo);
+  final transferStockToStore = TransferStockToStoreUseCase(invRepo);
+  final revertOrAdjustStoreStock = RevertOrAdjustStoreStockUseCase(invRepo);
 
   // Dashboard
   final dashboardLocalDs = DashboardLocalDatasourceImpl(dbHelper);
@@ -166,6 +169,8 @@ void main() async {
             updateProductUseCase: updateProductUseCase,
             deleteProductUseCase: deleteProductUseCase,
             deleteLotUseCase: deleteLotUseCase,
+            transferStockToStoreUseCase: transferStockToStore,
+            revertOrAdjustStoreStockUseCase: revertOrAdjustStoreStock,
             syncManager: syncManager,
           )..loadProducts(),
         ),
