@@ -4,6 +4,7 @@ import '../../domain/usecases/get_financial_overview_usecase.dart';
 import '../../domain/usecases/get_daily_cash_audit_usecase.dart';
 import '../../domain/repositories/dashboard_repository.dart';
 import '../../data/models/financial_metrics_model.dart';
+import '../../domain/entities/sales_history_entry.dart';
 import '../../../pos/domain/entities/sale.dart';
 import '../../../pos/domain/usecases/get_sales_by_date.dart';
 import '../../../auth/domain/entities/user.dart';
@@ -75,6 +76,10 @@ class DashboardViewModel extends ChangeNotifier {
 
   String? _sellerErrorMessage;
   String? get sellerErrorMessage => _sellerErrorMessage;
+
+  /// Flat JOIN rows for the SalesHistoryPanelBox (admin view)
+  List<SalesHistoryEntry> _salesAuditHistory = [];
+  List<SalesHistoryEntry> get salesAuditHistory => List.unmodifiable(_salesAuditHistory);
 
   DashboardViewModel({
     required this.getFinancialOverview,
@@ -194,6 +199,24 @@ class DashboardViewModel extends ChangeNotifier {
           );
         }
       }
+
+      // Load the detailed audit history for the SalesHistoryPanelBox
+      try {
+        _salesAuditHistory = await dashboardRepository!.getAllSalesHistory(
+          usuarioId: filterUsuarioId,
+          origenVenta: filterOrigen,
+        );
+      } catch (_) {
+        try {
+          _salesAuditHistory = await dashboardRepository!.getSalesAuditHistory(
+            date: null,
+            usuarioId: filterUsuarioId,
+            origenVenta: filterOrigen,
+          );
+        } catch (_) {
+          _salesAuditHistory = [];
+        }
+      }
     } else if (getSalesByDate != null) {
       final salesResult = await getSalesByDate!(DateParams(_selectedDate));
       salesResult.fold(
@@ -288,6 +311,17 @@ class DashboardViewModel extends ChangeNotifier {
 
   Future<void> changeDate(DateTime newDate, {String? sellerUsuarioId}) async {
     await loadAuditForDate(newDate, sellerUsuarioId: sellerUsuarioId);
+  }
+
+  /// Sincroniza todas las ventas desde Firestore y notifica a la UI inmediatamente.
+  Future<int> forceSyncAllSalesFromFirestore() async {
+    int count = 0;
+    if (syncManager != null) {
+      count = await syncManager!.forceSyncAllSalesFromFirestore();
+    }
+    await loadDashboardData();
+    notifyListeners();
+    return count;
   }
 }
 

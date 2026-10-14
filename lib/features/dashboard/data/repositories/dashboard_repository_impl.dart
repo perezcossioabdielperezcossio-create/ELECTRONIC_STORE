@@ -2,6 +2,7 @@ import '../../../auth/domain/entities/user.dart';
 import '../../../pos/domain/entities/sale.dart';
 import '../models/financial_metrics_model.dart';
 import '../../domain/repositories/dashboard_repository.dart';
+import '../../domain/entities/sales_history_entry.dart';
 import '../datasources/dashboard_local_datasource.dart';
 
 class DashboardRepositoryImpl implements DashboardRepository {
@@ -38,4 +39,29 @@ class DashboardRepositoryImpl implements DashboardRepository {
   Future<List<MetricaCanal>> getMetricasCanal() async {
     return await localDatasource.getMetricasCanal();
   }
+
+  @override
+  Future<List<SalesHistoryEntry>> getSalesAuditHistory({
+    DateTime? date,
+    String? usuarioId,
+    String? origenVenta,
+  }) async {
+    return await localDatasource.getSalesAuditHistory(
+      date: date,
+      usuarioId: usuarioId,
+      origenVenta: origenVenta,
+    );
+  }
+
+  @override
+  Future<List<SalesHistoryEntry>> getAllSalesHistory({
+    String? usuarioId,
+    String? origenVenta,
+  }) async {
+    return await localDatasource.getAllSalesHistory(
+      usuarioId: usuarioId,
+      origenVenta: origenVenta,
+    );
+  }
 }
+

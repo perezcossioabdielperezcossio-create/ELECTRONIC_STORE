@@ -8,6 +8,7 @@ import '../../../pos/domain/entities/sale_detail.dart';
 import '../../../pos/domain/entities/sale_item.dart';
 import '../../../pos/data/models/sale_detail_model.dart';
 import '../models/financial_metrics_model.dart';
+import '../../domain/entities/sales_history_entry.dart';
 
 abstract class DashboardLocalDatasource {
   Future<BalancePatrimonial> getBalancePatrimonial({String? origenVenta});
@@ -16,6 +17,15 @@ abstract class DashboardLocalDatasource {
   Future<List<SaleModel>> getVentasFiltradas({DateTime? date, String? usuarioId, String? origenVenta, int? limit});
   Future<List<User>> getSellers();
   Future<List<MetricaCanal>> getMetricasCanal();
+  Future<List<SalesHistoryEntry>> getSalesAuditHistory({
+    DateTime? date,
+    String? usuarioId,
+    String? origenVenta,
+  });
+  Future<List<SalesHistoryEntry>> getAllSalesHistory({
+    String? usuarioId,
+    String? origenVenta,
+  });
 }
 
 class DashboardLocalDatasourceImpl implements DashboardLocalDatasource {
@@ -626,5 +636,437 @@ class DashboardLocalDatasourceImpl implements DashboardLocalDatasource {
         totalCostos: (row['total_costos'] as num?)?.toDouble() ?? 0.0,
       );
     }).toList();
+  }
+
+  @override
+  Future<List<SalesHistoryEntry>> getSalesAuditHistory({
+    DateTime? date,
+    String? usuarioId,
+    String? origenVenta,
+  }) async {
+    final db = await dbHelper.database;
+    final entries = <SalesHistoryEntry>[];
+    final isSellerQuery =
+        origenVenta == 'TIENDA' || (usuarioId != null && usuarioId.isNotEmpty && origenVenta != 'ALMACEN');
+
+    if (isSellerQuery) {
+      // Ventas de Tienda: tabla ventas_vendedor (items en columna JSON)
+      final vvCols = await _getTableColumns(db, 'ventas_vendedor');
+      if (vvCols.isNotEmpty) {
+        try {
+          final whereConditions = <String>[];
+          final args = <dynamic>[];
+
+          if (date != null) {
+            final dStr = date.toIso8601String().substring(0, 10);
+            whereConditions.add("(substr(vv.fecha_venta, 1, 10) = ? OR date(vv.fecha_venta) = date(?))");
+            args.addAll([dStr, dStr]);
+          }
+          whereConditions.add("UPPER(COALESCE(vv.status, 'COMPLETED')) NOT IN ('VOIDED', 'ANULADA')");
+          if (usuarioId != null && usuarioId.isNotEmpty) {
+            whereConditions.add('vv.usuario_id = ?');
+            args.add(usuarioId);
+          }
+
+          final whereClause =
+              whereConditions.isNotEmpty ? 'WHERE ${whereConditions.join(' AND ')}' : '';
+
+          final rows = await db.rawQuery('''
+            SELECT
+              vv.id            AS venta_id,
+              vv.fecha_venta   AS fecha,
+              vv.metodo_pago,
+              'TIENDA'         AS tipo_entrega,
+              vv.usuario_id,
+              NULL             AS cliente_id,
+              COALESCE(vv.cliente_nombre, 'Mostrador') AS cliente_nombre,
+              vv.items         AS items_json
+            FROM ventas_vendedor vv
+            $whereClause
+            ORDER BY vv.fecha_venta DESC
+          ''', args);
+
+          for (final row in rows) {
+            final ventaId = (row['venta_id'] ?? '').toString();
+            final fecha =
+                DateTime.tryParse((row['fecha'] as String?) ?? '') ?? DateTime.now();
+            final metodoPago = (row['metodo_pago'] as String?) ?? 'EFECTIVO';
+            final clienteNombre = (row['cliente_nombre'] as String?) ?? 'Mostrador';
+            final rowUsuarioId = row['usuario_id'] as String?;
+
+            // Expand the JSON items array into individual entries
+            final rawItems = row['items_json'];
+            if (rawItems is String && rawItems.isNotEmpty) {
+              try {
+                final decoded = jsonDecode(rawItems);
+                if (decoded is List) {
+                  for (final item in decoded) {
+                    final cantidad =
+                        (item['cantidad'] as num?)?.toInt() ?? 1;
+                    final precioUnit =
+                        (item['precio_unitario'] as num?)?.toDouble() ?? 0.0;
+                    entries.add(SalesHistoryEntry(
+                      ventaId: ventaId,
+                      fecha: fecha,
+                      metodoPago: metodoPago,
+                      tipoEntrega: 'TIENDA',
+                      usuarioId: rowUsuarioId,
+                      clienteNombre: clienteNombre,
+                      detalleId: '${ventaId}_${item['product_id'] ?? ''}',
+                      productId: (item['product_id'] ?? '').toString(),
+                      productName: (item['product_name'] ?? '').toString(),
+                      sku: item['sku']?.toString(),
+                      cantidad: cantidad,
+                      costoUnitario: 0.0, // no cost tracked in seller JSON
+                      precioUnitario: precioUnit,
+                    ));
+                  }
+                }
+              } catch (_) {}
+            }
+          }
+        } catch (_) {}
+      }
+      return entries;
+    }
+
+    // ── Ventas de Almacén (o Consolidado): JOIN ventas × detalle_ventas × products ──
+    final ventasCols = await _getTableColumns(db, 'ventas');
+    final detalleCols = await _getTableColumns(db, 'detalle_ventas');
+
+    if (ventasCols.isNotEmpty && detalleCols.isNotEmpty) {
+      try {
+        final whereConditions = <String>[];
+        final args = <dynamic>[];
+
+        if (date != null) {
+          final dStr = date.toIso8601String().substring(0, 10);
+          if (ventasCols.contains('fecha_venta') && ventasCols.contains('created_at')) {
+            whereConditions.add(
+                "(substr(COALESCE(v.fecha_venta, v.created_at, ''), 1, 10) = ? "
+                "OR date(COALESCE(v.fecha_venta, v.created_at, 'now')) = date(?))");
+          } else if (ventasCols.contains('fecha_venta')) {
+            whereConditions
+                .add("(substr(v.fecha_venta, 1, 10) = ? OR date(v.fecha_venta) = date(?))");
+          } else {
+            whereConditions
+                .add("(substr(v.created_at, 1, 10) = ? OR date(v.created_at) = date(?))");
+          }
+          args.addAll([dStr, dStr]);
+        }
+
+        if (ventasCols.contains('status')) {
+          whereConditions.add("UPPER(COALESCE(v.status, 'COMPLETED')) NOT IN ('VOIDED', 'ANULADA')");
+        }
+        if (ventasCols.contains('origen_venta') && origenVenta == 'ALMACEN') {
+          whereConditions
+              .add("UPPER(COALESCE(NULLIF(trim(v.origen_venta), ''), 'ALMACEN')) = 'ALMACEN'");
+        }
+
+        final whereClause =
+            whereConditions.isNotEmpty ? 'WHERE ${whereConditions.join(' AND ')}' : '';
+
+        final dateCol = ventasCols.contains('fecha_venta') && ventasCols.contains('created_at')
+            ? 'COALESCE(v.fecha_venta, v.created_at)'
+            : ventasCols.contains('fecha_venta')
+                ? 'v.fecha_venta'
+                : 'v.created_at';
+
+        final clienteExpr = ventasCols.contains('cliente_nombre') && ventasCols.contains('customer_name')
+            ? "COALESCE(v.cliente_nombre, v.customer_name, 'Mostrador')"
+            : ventasCols.contains('cliente_nombre')
+                ? "COALESCE(v.cliente_nombre, 'Mostrador')"
+                : ventasCols.contains('customer_name')
+                    ? "COALESCE(v.customer_name, 'Mostrador')"
+                    : "'Mostrador'";
+
+        final prodIdCol = detalleCols.contains('product_id')
+            ? 'dv.product_id'
+            : (detalleCols.contains('producto_id') ? 'dv.producto_id' : "''");
+
+        final prodNameExpr = detalleCols.contains('product_name')
+            ? "COALESCE(p.name, dv.product_name, 'Venta General')"
+            : "COALESCE(p.name, 'Venta General')";
+
+        final costCol = detalleCols.contains('costo_unitario_compra')
+            ? 'dv.costo_unitario_compra'
+            : (detalleCols.contains('unit_cost') ? 'COALESCE(dv.unit_cost, 0.0)' : '0.0');
+
+        final priceCol = detalleCols.contains('precio_unitario_cobrado')
+            ? 'dv.precio_unitario_cobrado'
+            : (detalleCols.contains('unit_price') ? 'COALESCE(dv.unit_price, 0.0)' : 'NULL');
+
+        final discountCol = detalleCols.contains('line_discount')
+            ? 'COALESCE(dv.line_discount, 0.0)'
+            : (detalleCols.contains('descuento_linea') ? 'COALESCE(dv.descuento_linea, 0.0)' : '0.0');
+
+        final rows = await db.rawQuery('''
+          SELECT
+            v.id                                                AS venta_id,
+            $dateCol                                            AS fecha,
+            COALESCE(v.metodo_pago, 'EFECTIVO')                AS metodo_pago,
+            COALESCE(v.tipo_entrega, 'MOSTRADOR')              AS tipo_entrega,
+            ${ventasCols.contains('usuario_id') ? 'v.usuario_id' : 'NULL'} AS usuario_id,
+            ${ventasCols.contains('cliente_id') ? 'v.cliente_id' : 'NULL'} AS cliente_id,
+            $clienteExpr                                       AS cliente_nombre,
+            COALESCE(v.total_cobrado, 0.0)                     AS total_venta,
+            COALESCE(dv.id, v.id || '_det')                    AS detalle_id,
+            COALESCE($prodIdCol, '')                           AS product_id,
+            $prodNameExpr                                      AS product_name,
+            COALESCE(p.sku, '-')                               AS sku,
+            COALESCE(dv.cantidad, 1)                           AS cantidad,
+            COALESCE($costCol, 0.0)                            AS precio_compra,
+            COALESCE($costCol, 0.0)                            AS costo_unitario,
+            COALESCE($priceCol, v.total_cobrado, 0.0)          AS precio_venta,
+            COALESCE($priceCol, v.total_cobrado, 0.0)          AS precio_unitario,
+            COALESCE((COALESCE($priceCol, v.total_cobrado, 0.0) - COALESCE($costCol, 0.0)) * COALESCE(dv.cantidad, 1), 0.0) AS ganancia_neta,
+            $discountCol                                       AS line_discount
+          FROM ventas v
+          LEFT JOIN detalle_ventas dv ON v.id = dv.venta_id
+          LEFT JOIN products p ON ($prodIdCol = p.id OR (p.sku = $prodIdCol AND $prodIdCol != ''))
+          $whereClause
+          ORDER BY $dateCol DESC
+        ''', args);
+
+        for (final row in rows) {
+          final fecha = DateTime.tryParse((row['fecha'] as String?) ?? '') ?? DateTime.now();
+          final totalVenta = (row['total_venta'] as num?)?.toDouble() ?? 0.0;
+          final precioUnit = (row['precio_venta'] as num?)?.toDouble() ??
+              (row['precio_unitario'] as num?)?.toDouble() ??
+              totalVenta;
+          final costoUnit = (row['precio_compra'] as num?)?.toDouble() ??
+              (row['costo_unitario'] as num?)?.toDouble() ??
+              0.0;
+
+          entries.add(SalesHistoryEntry(
+            ventaId: (row['venta_id'] ?? '').toString(),
+            fecha: fecha,
+            metodoPago: (row['metodo_pago'] as String?) ?? 'EFECTIVO',
+            tipoEntrega: (row['tipo_entrega'] as String?) ?? 'MOSTRADOR',
+            usuarioId: row['usuario_id'] as String?,
+            clienteId: row['cliente_id'] as String?,
+            clienteNombre: (row['cliente_nombre'] as String?) ?? 'Mostrador',
+            detalleId: (row['detalle_id'] ?? '${row['venta_id']}_det').toString(),
+            productId: (row['product_id'] ?? '').toString(),
+            productName: (row['product_name'] ?? 'Venta General').toString(),
+            sku: (row['sku'] as String?) ?? '-',
+            cantidad: (row['cantidad'] as num?)?.toInt() ?? 1,
+            costoUnitario: costoUnit,
+            precioUnitario: precioUnit,
+            lineDiscount: (row['line_discount'] as num?)?.toDouble() ?? 0.0,
+          ));
+        }
+        return entries;
+      } catch (_) {}
+    }
+
+    // ── Fallback: tabla sales / sale_items (tests heredados) ──
+    final salesCols = await _getTableColumns(db, 'sales');
+    final itemsCols = await _getTableColumns(db, 'sale_items');
+    if (salesCols.isNotEmpty && itemsCols.isNotEmpty) {
+      try {
+        final whereConditions = <String>[];
+        final args = <dynamic>[];
+
+        if (date != null) {
+          final dStr = date.toIso8601String().substring(0, 10);
+          if (salesCols.contains('created_at') && salesCols.contains('fecha_venta')) {
+            whereConditions.add(
+                "(substr(COALESCE(s.created_at, s.fecha_venta, ''), 1, 10) = ? "
+                "OR date(COALESCE(s.created_at, s.fecha_venta, 'now')) = date(?))");
+          } else if (salesCols.contains('created_at')) {
+            whereConditions
+                .add("(substr(s.created_at, 1, 10) = ? OR date(s.created_at) = date(?))");
+          } else {
+            whereConditions
+                .add("(substr(s.fecha_venta, 1, 10) = ? OR date(s.fecha_venta) = date(?))");
+          }
+          args.addAll([dStr, dStr]);
+        }
+
+        if (salesCols.contains('status')) {
+          whereConditions.add("UPPER(COALESCE(s.status, 'COMPLETED')) NOT IN ('VOIDED', 'ANULADA')");
+        }
+
+        final whereClause =
+            whereConditions.isNotEmpty ? 'WHERE ${whereConditions.join(' AND ')}' : '';
+
+        final dateCol =
+            salesCols.contains('created_at') ? 's.created_at' : 's.fecha_venta';
+        final paymentCol =
+            salesCols.contains('payment_method') ? 's.payment_method' : "'EFECTIVO'";
+
+        final rows = await db.rawQuery('''
+          SELECT
+            s.id                                  AS venta_id,
+            $dateCol                              AS fecha,
+            $paymentCol                           AS metodo_pago,
+            'MOSTRADOR'                           AS tipo_entrega,
+            NULL                                  AS usuario_id,
+            NULL                                  AS cliente_id,
+            'Mostrador'                           AS cliente_nombre,
+            COALESCE(si.id, s.id || '_item')      AS detalle_id,
+            COALESCE(si.product_id, '')           AS product_id,
+            COALESCE(p.name, si.product_id, 'Venta General') AS product_name,
+            COALESCE(p.sku, '-')                  AS sku,
+            COALESCE(si.quantity, 1)              AS cantidad,
+            COALESCE(si.unit_cost, 0.0)           AS costo_unitario,
+            COALESCE(si.unit_price, s.total, 0.0) AS precio_unitario,
+            0.0                                   AS line_discount
+          FROM sales s
+          LEFT JOIN sale_items si ON si.sale_id = s.id
+          LEFT JOIN products p ON p.id = si.product_id
+          $whereClause
+          ORDER BY $dateCol DESC
+        ''', args);
+
+        for (final row in rows) {
+          final fecha = DateTime.tryParse((row['fecha'] as String?) ?? '') ?? DateTime.now();
+          entries.add(SalesHistoryEntry(
+            ventaId: (row['venta_id'] ?? '').toString(),
+            fecha: fecha,
+            metodoPago: (row['metodo_pago'] as String?) ?? 'EFECTIVO',
+            tipoEntrega: 'MOSTRADOR',
+            clienteNombre: 'Mostrador',
+            detalleId: (row['detalle_id'] ?? '').toString(),
+            productId: (row['product_id'] ?? '').toString(),
+            productName: (row['product_name'] ?? '').toString(),
+            sku: row['sku'] as String?,
+            cantidad: (row['cantidad'] as num?)?.toInt() ?? 1,
+            costoUnitario: (row['costo_unitario'] as num?)?.toDouble() ?? 0.0,
+            precioUnitario: (row['precio_unitario'] as num?)?.toDouble() ?? 0.0,
+          ));
+        }
+      } catch (_) {}
+    }
+
+    return entries;
+  }
+
+  @override
+  Future<List<SalesHistoryEntry>> getAllSalesHistory({
+    String? usuarioId,
+    String? origenVenta,
+  }) async {
+    final db = await dbHelper.database;
+    final entries = <SalesHistoryEntry>[];
+
+    // Si es auditoría de vendedor por tienda, consultar ventas_vendedor
+    if (origenVenta == 'TIENDA' || (usuarioId != null && usuarioId.isNotEmpty && origenVenta != 'ALMACEN')) {
+      return getSalesAuditHistory(date: null, usuarioId: usuarioId, origenVenta: origenVenta);
+    }
+
+    final ventasCols = await _getTableColumns(db, 'ventas');
+    final detalleCols = await _getTableColumns(db, 'detalle_ventas');
+
+    if (ventasCols.isNotEmpty && detalleCols.isNotEmpty) {
+      try {
+        final whereConditions = <String>[];
+        final args = <dynamic>[];
+
+        if (ventasCols.contains('status')) {
+          whereConditions.add("UPPER(COALESCE(v.status, 'COMPLETED')) NOT IN ('VOIDED', 'ANULADA')");
+        }
+
+        final whereClause = whereConditions.isNotEmpty ? 'WHERE ${whereConditions.join(' AND ')}' : '';
+
+        final dateCol = ventasCols.contains('fecha_venta') && ventasCols.contains('created_at')
+            ? 'COALESCE(v.fecha_venta, v.created_at)'
+            : ventasCols.contains('fecha_venta')
+                ? 'v.fecha_venta'
+                : 'v.created_at';
+
+        final clienteExpr = ventasCols.contains('cliente_nombre') && ventasCols.contains('customer_name')
+            ? "COALESCE(v.cliente_nombre, v.customer_name, 'Cliente Mostrador')"
+            : ventasCols.contains('cliente_nombre')
+                ? "COALESCE(v.cliente_nombre, 'Cliente Mostrador')"
+                : ventasCols.contains('customer_name')
+                    ? "COALESCE(v.customer_name, 'Cliente Mostrador')"
+                    : "'Cliente Mostrador'";
+
+        final prodIdCol = detalleCols.contains('product_id')
+            ? 'dv.product_id'
+            : (detalleCols.contains('producto_id') ? 'dv.producto_id' : "''");
+
+        final prodNameExpr = detalleCols.contains('product_name')
+            ? "COALESCE(p.name, dv.product_name, 'Venta General')"
+            : "COALESCE(p.name, 'Venta General')";
+
+        final costCol = detalleCols.contains('costo_unitario_compra')
+            ? 'dv.costo_unitario_compra'
+            : (detalleCols.contains('unit_cost') ? 'COALESCE(dv.unit_cost, 0.0)' : '0.0');
+
+        final priceCol = detalleCols.contains('precio_unitario_cobrado')
+            ? 'dv.precio_unitario_cobrado'
+            : (detalleCols.contains('unit_price') ? 'COALESCE(dv.unit_price, 0.0)' : 'NULL');
+
+        final discountCol = detalleCols.contains('line_discount')
+            ? 'COALESCE(dv.line_discount, 0.0)'
+            : (detalleCols.contains('descuento_linea') ? 'COALESCE(dv.descuento_linea, 0.0)' : '0.0');
+
+        final rows = await db.rawQuery('''
+          SELECT
+            v.id                                                AS venta_id,
+            $dateCol                                            AS fecha,
+            COALESCE(v.metodo_pago, 'EFECTIVO')                AS metodo_pago,
+            COALESCE(v.tipo_entrega, 'MOSTRADOR')              AS tipo_entrega,
+            ${ventasCols.contains('usuario_id') ? 'v.usuario_id' : 'NULL'} AS usuario_id,
+            ${ventasCols.contains('cliente_id') ? 'v.cliente_id' : 'NULL'} AS cliente_id,
+            $clienteExpr                                       AS cliente_nombre,
+            COALESCE(v.total_cobrado, 0.0)                     AS total_venta,
+            COALESCE(dv.id, v.id || '_det')                    AS detalle_id,
+            COALESCE($prodIdCol, '')                           AS product_id,
+            $prodNameExpr                                      AS product_name,
+            COALESCE(p.sku, '-')                               AS sku,
+            COALESCE(dv.cantidad, 1)                           AS cantidad,
+            COALESCE($costCol, 0.0)                            AS precio_compra,
+            COALESCE($costCol, 0.0)                            AS costo_unitario,
+            COALESCE($priceCol, v.total_cobrado, 0.0)          AS precio_venta,
+            COALESCE($priceCol, v.total_cobrado, 0.0)          AS precio_unitario,
+            COALESCE((COALESCE($priceCol, v.total_cobrado, 0.0) - COALESCE($costCol, 0.0)) * COALESCE(dv.cantidad, 1), 0.0) AS ganancia_neta,
+            $discountCol                                       AS line_discount
+          FROM ventas v
+          LEFT JOIN detalle_ventas dv ON v.id = dv.venta_id
+          LEFT JOIN products p ON ($prodIdCol = p.id OR (p.sku = $prodIdCol AND $prodIdCol != ''))
+          $whereClause
+          ORDER BY $dateCol DESC
+        ''', args);
+
+        for (final row in rows) {
+          final fecha = DateTime.tryParse((row['fecha'] as String?) ?? '') ?? DateTime.now();
+          final totalVenta = (row['total_venta'] as num?)?.toDouble() ?? 0.0;
+          final precioUnit = (row['precio_venta'] as num?)?.toDouble() ??
+              (row['precio_unitario'] as num?)?.toDouble() ??
+              totalVenta;
+          final costoUnit = (row['precio_compra'] as num?)?.toDouble() ??
+              (row['costo_unitario'] as num?)?.toDouble() ??
+              0.0;
+
+          entries.add(SalesHistoryEntry(
+            ventaId: (row['venta_id'] ?? '').toString(),
+            fecha: fecha,
+            metodoPago: (row['metodo_pago'] as String?) ?? 'EFECTIVO',
+            tipoEntrega: (row['tipo_entrega'] as String?) ?? 'MOSTRADOR',
+            usuarioId: row['usuario_id'] as String?,
+            clienteId: row['cliente_id'] as String?,
+            clienteNombre: (row['cliente_nombre'] as String?) ?? 'Cliente Mostrador',
+            detalleId: (row['detalle_id'] ?? '${row['venta_id']}_det').toString(),
+            productId: (row['product_id'] ?? '').toString(),
+            productName: (row['product_name'] ?? 'Venta General').toString(),
+            sku: (row['sku'] as String?) ?? '-',
+            cantidad: (row['cantidad'] as num?)?.toInt() ?? 1,
+            costoUnitario: costoUnit,
+            precioUnitario: precioUnit,
+            lineDiscount: (row['line_discount'] as num?)?.toDouble() ?? 0.0,
+          ));
+        }
+
+        if (entries.isNotEmpty) {
+          return entries;
+        }
+      } catch (_) {}
+    }
+
+    return getSalesAuditHistory(date: null, usuarioId: usuarioId, origenVenta: origenVenta);
   }
 }

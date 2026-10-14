@@ -44,6 +44,8 @@ void main() {
     when(() => mockSyncManager.isOnline).thenReturn(true);
     when(() => mockSyncManager.pendingCount).thenReturn(0);
     when(() => mockSyncManager.onRemoteDataChanged).thenAnswer((_) => const Stream.empty());
+    when(() => mockSyncManager.forceSyncAllSalesFromFirestore()).thenAnswer((_) async => 0);
+    when(() => mockSyncManager.forceSyncSalesFromFirestore()).thenAnswer((_) async => 0);
 
     when(() => mockInventoryVM.state).thenReturn(ViewState.idle);
     when(() => mockInventoryVM.filteredProducts).thenReturn([]);
@@ -69,6 +71,7 @@ void main() {
     when(() => mockDashboardVM.overview).thenReturn(null);
     when(() => mockDashboardVM.arqueoDiario).thenReturn(null);
     when(() => mockDashboardVM.dailySales).thenReturn([]);
+    when(() => mockDashboardVM.salesAuditHistory).thenReturn([]);
     when(() => mockDashboardVM.selectedDate).thenReturn(DateTime.now());
     when(() => mockDashboardVM.loadDashboardData()).thenAnswer((_) async {});
     when(() => mockDashboardVM.loadSellers()).thenAnswer((_) async {});

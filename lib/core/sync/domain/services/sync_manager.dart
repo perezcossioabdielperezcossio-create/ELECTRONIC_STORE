@@ -247,49 +247,177 @@ class SyncManager extends ChangeNotifier {
     }
   }
 
-  Future<int> forceSyncSalesFromFirestore() async {
-    final snapshot = await FirebaseFirestore.instance.collection('sales').get();
-    final db = await DatabaseHelper.instance.database;
-    
-    for (var doc in snapshot.docs) {
-      final data = doc.data();
-      final id = doc.id;
-      final fecha = data['fecha_venta'] ?? data['created_at'] ?? DateTime.now().toIso8601String();
-      final total = ((data['total_cobrado'] ?? data['total'] ?? 0) as num).toDouble();
-      final metodoPago = data['metodo_pago'] ?? data['payment_method'] ?? 'EFECTIVO';
-      final origen = data['origen_venta'] ?? data['store_location'] ?? data['location'] ?? 'ALMACEN';
-      final tipoEntrega = data['tipo_entrega'] ?? data['delivery_method'] ?? 'TIENDA';
-      final usuarioId = data['usuario_id']?.toString() ?? '';
-      final status = (data['status']?.toString() ?? 'COMPLETED').toUpperCase();
+  Future<int> forceSyncAllSalesFromFirestore() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance.collection('sales').get();
+      final db = await DatabaseHelper.instance.database;
 
-      // Insertar en tabla ventas
-      await db.rawInsert('''
-        INSERT OR REPLACE INTO ventas (
-          id, total_cobrado, metodo_pago, tipo_entrega, fecha_venta, status, is_locked, usuario_id, origen_venta
-        ) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
-      ''', [id, total, metodoPago, tipoEntrega, fecha, status, usuarioId, origen]);
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final id = doc.id;
+        final fecha = data['fecha_venta'] ?? data['created_at'] ?? DateTime.now().toIso8601String();
+        final total = ((data['total_cobrado'] ?? data['total'] ?? data['unit_price'] ?? 0) as num).toDouble();
+        final metodoPago = data['metodo_pago'] ?? data['payment_method'] ?? 'EFECTIVO';
+        final tipoEntrega = data['tipo_entrega'] ?? data['delivery_method'] ?? 'TIENDA';
+        final usuarioId = data['usuario_id']?.toString() ?? '';
+        final clienteNombre = (data['customer_name'] ?? data['cliente_nombre'] ?? 'Cliente Mostrador').toString();
+        final origen = data['origen_venta'] ?? data['store_location'] ?? data['location'] ?? 'ALMACEN';
+        final rawStatus = (data['status']?.toString() ?? 'COMPLETED').toUpperCase();
+        final status = (rawStatus == 'PENDING' || rawStatus == 'COMPLETED') ? 'COMPLETED' : rawStatus;
 
-      // Procesar ítems/detalles embebidos
-      final items = (data['sale_details'] ?? data['items']) as List<dynamic>? ?? [];
-      for (final item in items) {
-        if (item is Map<String, dynamic>) {
-          await db.rawInsert('''
-            INSERT OR REPLACE INTO detalle_ventas (
-              id, venta_id, lote_id, product_id, cantidad, costo_unitario_compra, precio_unitario_cobrado, line_discount
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-          ''', [
-            item['id'] ?? ('${id}_${item['lote_id'] ?? item['lot_id'] ?? ''}'),
-            id,
-            item['lote_id'] ?? item['lot_id'] ?? '',
-            item['product_id'] ?? '',
-            item['cantidad'] ?? item['quantity'] ?? 1,
-            ((item['costo_unitario_compra'] ?? item['unit_cost'] ?? 0) as num).toDouble(),
-            ((item['precio_unitario_cobrado'] ?? item['unit_price'] ?? 0) as num).toDouble(),
-            ((item['line_discount'] ?? 0) as num).toDouble(),
-          ]);
+        // 1. Insertar venta cabecera
+        await db.rawInsert('''
+          INSERT OR REPLACE INTO ventas (
+            id, total_cobrado, metodo_pago, tipo_entrega, fecha_venta, status, is_locked, usuario_id, origen_venta
+          ) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+        ''', [id, total, metodoPago, tipoEntrega, fecha, status, usuarioId, origen]);
+
+        if (clienteNombre.isNotEmpty) {
+          try {
+            await db.rawUpdate(
+              'UPDATE ventas SET customer_name = ?, cliente_nombre = ? WHERE id = ?',
+              [clienteNombre, clienteNombre, id],
+            );
+          } catch (_) {
+            try {
+              await db.rawUpdate('UPDATE ventas SET customer_name = ? WHERE id = ?', [clienteNombre, id]);
+            } catch (_) {}
+          }
+        }
+
+        // Helper to insert a detail record into detalle_ventas
+        Future<void> insertDetailRow({
+          required String detailId,
+          required String ventaId,
+          String? loteId,
+          required String prodId,
+          required String prodName,
+          required int cantidad,
+          required double costo,
+          required double precio,
+          required double descuento,
+        }) async {
+          final lot = loteId ?? '';
+          try {
+            await db.rawInsert('''
+              INSERT OR REPLACE INTO detalle_ventas (
+                id, venta_id, lote_id, product_id, cantidad, costo_unitario_compra, precio_unitario_cobrado, line_discount
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', [detailId, ventaId, lot, prodId, cantidad, costo, precio, descuento]);
+          } catch (_) {
+            try {
+              await db.rawInsert('''
+                INSERT OR REPLACE INTO detalle_ventas (
+                  id, venta_id, lote_id, producto_id, cantidad, costo_unitario_compra, precio_unitario_cobrado, line_discount
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+              ''', [detailId, ventaId, lot, prodId, cantidad, costo, precio, descuento]);
+            } catch (_) {}
+          }
+
+          if (prodId.isNotEmpty) {
+            try {
+              await db.rawUpdate('UPDATE detalle_ventas SET producto_id = ? WHERE id = ?', [prodId, detailId]);
+            } catch (_) {}
+          }
+
+          if (prodName.isNotEmpty) {
+            try {
+              await db.rawUpdate('UPDATE detalle_ventas SET product_name = ? WHERE id = ?', [prodName, detailId]);
+            } catch (_) {}
+          }
+        }
+
+        int insertedDetailsCount = 0;
+
+        // 2. Extracción Robusta de Detalles:
+        // A. Si doc.data()['sale_details'] o doc.data()['items'] es una lista no vacía:
+        final dynamic rawDetails = data['sale_details'] ?? data['items'];
+        if (rawDetails is List && rawDetails.isNotEmpty) {
+          for (var i = 0; i < rawDetails.length; i++) {
+            final rawItem = rawDetails[i];
+            if (rawItem is Map) {
+              final item = Map<String, dynamic>.from(rawItem);
+              final detailId = (item['id'] ?? '${id}_det_$i').toString();
+              final prodId = (item['product_id'] ?? item['producto_id'] ?? '').toString();
+              final prodName = (item['product_name'] ?? item['name'] ?? 'Venta Mostrador').toString();
+              final loteId = (item['lote_id'] ?? item['lot_id'] ?? '').toString();
+              final cantidad = ((item['cantidad'] ?? item['quantity'] ?? 1) as num).toInt();
+              final costo = ((item['costo_unitario_compra'] ?? item['unit_cost'] ?? 0) as num).toDouble();
+              final precio = ((item['precio_unitario_cobrado'] ?? item['unit_price'] ?? total) as num).toDouble();
+              final descuento = ((item['line_discount'] ?? item['descuento'] ?? 0) as num).toDouble();
+
+              await insertDetailRow(
+                detailId: detailId,
+                ventaId: id,
+                loteId: loteId,
+                prodId: prodId,
+                prodName: prodName,
+                cantidad: cantidad,
+                costo: costo,
+                precio: precio,
+                descuento: descuento,
+              );
+              insertedDetailsCount++;
+            }
+          }
+        }
+
+        // B. Si no viene como lista embebida, consultar la subcolección sale_details
+        if (insertedDetailsCount == 0) {
+          try {
+            final detailsSnap = await doc.reference.collection('sale_details').get();
+            if (detailsSnap.docs.isNotEmpty) {
+              for (final dDoc in detailsSnap.docs) {
+                final dData = dDoc.data();
+                final prodId = (dData['product_id'] ?? dData['producto_id'] ?? '').toString();
+                final prodName = (dData['product_name'] ?? dData['name'] ?? 'Venta Mostrador').toString();
+                final loteId = (dData['lote_id'] ?? dData['lot_id'] ?? '').toString();
+                final cantidad = ((dData['cantidad'] ?? dData['quantity'] ?? 1) as num).toInt();
+                final costo = ((dData['costo_unitario_compra'] ?? dData['unit_cost'] ?? 0) as num).toDouble();
+                final precio = ((dData['precio_unitario_cobrado'] ?? dData['unit_price'] ?? total) as num).toDouble();
+                final descuento = ((dData['line_discount'] ?? 0) as num).toDouble();
+
+                await insertDetailRow(
+                  detailId: dDoc.id,
+                  ventaId: id,
+                  loteId: loteId,
+                  prodId: prodId,
+                  prodName: prodName,
+                  cantidad: cantidad,
+                  costo: costo,
+                  precio: precio,
+                  descuento: descuento,
+                );
+                insertedDetailsCount++;
+              }
+            }
+          } catch (_) {}
+        }
+
+        // C. Si no tiene ningún detalle, generar un renglón por defecto en detalle_ventas:
+        if (insertedDetailsCount == 0) {
+          await insertDetailRow(
+            detailId: '${id}_det',
+            ventaId: id,
+            loteId: '',
+            prodId: '',
+            prodName: 'Venta Mostrador',
+            cantidad: 1,
+            costo: 0.0,
+            precio: total,
+            descuento: 0.0,
+          );
         }
       }
+
+      _syncEventsController.add(const SyncCompletedEvent('sales'));
+      notifyListeners();
+      return snapshot.docs.length;
+    } catch (e) {
+      debugPrint('forceSyncAllSalesFromFirestore error: $e');
+      return 0;
     }
-    return snapshot.docs.length;
   }
+
+  Future<int> forceSyncSalesFromFirestore() => forceSyncAllSalesFromFirestore();
 }

@@ -76,6 +76,24 @@ class DatabaseHelper {
       await db.execute("ALTER TABLE ventas ADD COLUMN store_location TEXT DEFAULT 'ALMACEN';");
     } catch (_) {}
     try {
+      await db.execute("ALTER TABLE ventas ADD COLUMN cliente_nombre TEXT;");
+    } catch (_) {}
+    try {
+      await db.execute("ALTER TABLE ventas ADD COLUMN customer_name TEXT;");
+    } catch (_) {}
+    try {
+      await db.execute("ALTER TABLE detalle_ventas ADD COLUMN product_id TEXT;");
+    } catch (_) {}
+    try {
+      await db.execute("ALTER TABLE detalle_ventas ADD COLUMN producto_id TEXT;");
+    } catch (_) {}
+    try {
+      await db.execute("ALTER TABLE detalle_ventas ADD COLUMN product_name TEXT;");
+    } catch (_) {}
+    try {
+      await db.execute("ALTER TABLE detalle_ventas ADD COLUMN line_discount REAL DEFAULT 0.0;");
+    } catch (_) {}
+    try {
       await db.execute("ALTER TABLE sales ADD COLUMN usuario_id TEXT;");
     } catch (_) {}
     try {

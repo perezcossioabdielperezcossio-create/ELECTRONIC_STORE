@@ -2,11 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../viewmodels/dashboard_viewmodel.dart';
-import 'package:electronic_store/core/sync/domain/services/sync_manager.dart';
 import '../../data/models/financial_metrics_model.dart';
-import '../../../pos/domain/entities/sale.dart';
 import '../../../inventory/presentation/viewmodels/inventory_viewmodel.dart';
 import '../../../inventory/presentation/screens/admin_store_inventory_screen.dart';
+import '../widgets/sales_history_panel_box.dart';
 
 class DashboardOverviewView extends StatefulWidget {
   const DashboardOverviewView({super.key});
@@ -19,10 +18,16 @@ class _DashboardOverviewViewState extends State<DashboardOverviewView> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
       final vm = context.read<DashboardViewModel>();
       vm.loadSellers();
-      vm.loadDashboardData();
+      try {
+        await vm.forceSyncAllSalesFromFirestore();
+      } catch (_) {}
+      if (mounted) {
+        await vm.loadDashboardData();
+      }
     });
   }
 
@@ -69,15 +74,19 @@ class _DashboardOverviewViewState extends State<DashboardOverviewView> {
             icon: const Icon(Icons.refresh),
             tooltip: 'Actualizar',
             onPressed: () async {
-              final syncManager = context.read<SyncManager>();
+              int count = 0;
+              final messenger = ScaffoldMessenger.of(context);
               final vm = context.read<DashboardViewModel>();
-              
-              final count = await syncManager.forceSyncSalesFromFirestore();
-              await vm.loadAuditForDate(vm.selectedDate);
-
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Ventas sincronizadas: $count')),
+              try {
+                count = await vm.forceSyncAllSalesFromFirestore();
+              } catch (_) {
+                try {
+                  await vm.loadDashboardData();
+                } catch (_) {}
+              }
+              if (mounted) {
+                messenger.showSnackBar(
+                  SnackBar(content: Text('Ventas sincronizadas desde la nube: $count')),
                 );
               }
             },
@@ -154,8 +163,11 @@ class _DashboardOverviewViewState extends State<DashboardOverviewView> {
                 _buildMainSummaryKpiCards(vm),
                 const SizedBox(height: 20),
 
-                // Historial de Ventas del Día
-                _buildDailySalesSection(vm),
+                // Historial de Ventas del Día — Panel Box
+                SalesHistoryPanelBox(
+                  entries: vm.salesAuditHistory,
+                  isLoading: vm.state == DashboardState.loading,
+                ),
                 const SizedBox(height: 20),
 
                 // Arqueo y Desglose por Método de Pago
@@ -268,182 +280,6 @@ class _DashboardOverviewViewState extends State<DashboardOverviewView> {
         ),
       ),
     );
-  }
-
-  /// Sección de Historial de Ventas Diarias
-  Widget _buildDailySalesSection(DashboardViewModel vm) {
-    final sales = vm.dailySales;
-    final timeFormat = DateFormat('HH:mm');
-
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.receipt_long, color: Colors.deepPurple, size: 22),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Historial de Ventas',
-                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-                Chip(
-                  label: Text('${sales.length} ventas'),
-                  backgroundColor: Colors.deepPurple.shade50,
-                  labelStyle: TextStyle(fontSize: 12, color: Colors.deepPurple.shade700, fontWeight: FontWeight.bold),
-                  padding: EdgeInsets.zero,
-                  visualDensity: VisualDensity.compact,
-                ),
-              ],
-            ),
-            const Divider(),
-            if (sales.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 24.0),
-                child: Center(
-                  child: Column(
-                    children: [
-                      Icon(Icons.inbox, size: 40, color: Colors.grey.shade400),
-                      const SizedBox(height: 8),
-                      Text(
-                        'No hay ventas registradas para esta fecha.',
-                        style: TextStyle(color: Colors.grey.shade600, fontStyle: FontStyle.italic),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-            else
-              ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: sales.length,
-                separatorBuilder: (_, index) => const Divider(height: 1),
-                itemBuilder: (context, index) {
-                  final sale = sales[index];
-                  final isVoided = sale.status == SaleStatus.voided;
-                  final totalUnits = sale.items.fold(0, (sum, i) => sum + i.quantity);
-
-                  return ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                    leading: CircleAvatar(
-                      backgroundColor: isVoided ? Colors.red.shade50 : _getPaymentColor(sale.paymentMethod).withAlpha(30),
-                      child: Icon(
-                        _getPaymentIcon(sale.paymentMethod),
-                        color: isVoided ? Colors.red : _getPaymentColor(sale.paymentMethod),
-                        size: 20,
-                      ),
-                    ),
-                    title: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            sale.customerName?.isNotEmpty == true ? sale.customerName! : 'Venta #${sale.id.substring(0, sale.id.length > 6 ? 6 : sale.id.length)}',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              decoration: isVoided ? TextDecoration.lineThrough : null,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Text(
-                          'Bs. ${sale.total.toStringAsFixed(2)}',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            color: isVoided ? Colors.red : Colors.green.shade800,
-                            decoration: isVoided ? TextDecoration.lineThrough : null,
-                          ),
-                        ),
-                      ],
-                    ),
-                    subtitle: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Wrap(
-                          spacing: 6,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            Text(
-                              timeFormat.format(sale.createdAt),
-                              style: const TextStyle(fontSize: 12, color: Colors.grey),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: _getPaymentColor(sale.paymentMethod).withAlpha(20),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                sale.paymentMethod,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: _getPaymentColor(sale.paymentMethod),
-                                ),
-                              ),
-                            ),
-                            if (sale.deliveryMethod == 'DELIVERY')
-                              const Icon(Icons.delivery_dining, size: 14, color: Colors.orange),
-                          ],
-                        ),
-                        Text(
-                          isVoided ? 'ANULADA' : '$totalUnits unid.',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: isVoided ? FontWeight.bold : FontWeight.normal,
-                            color: isVoided ? Colors.red : Colors.grey.shade700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  IconData _getPaymentIcon(String method) {
-    switch (method.toUpperCase()) {
-      case 'EFECTIVO':
-        return Icons.payments;
-      case 'QR':
-        return Icons.qr_code;
-      case 'TRANSFERENCIA':
-        return Icons.account_balance;
-      case 'TARJETA':
-        return Icons.credit_card;
-      default:
-        return Icons.monetization_on;
-    }
-  }
-
-  Color _getPaymentColor(String method) {
-    switch (method.toUpperCase()) {
-      case 'EFECTIVO':
-        return Colors.green.shade700;
-      case 'QR':
-        return Colors.purple.shade700;
-      case 'TRANSFERENCIA':
-        return Colors.blue.shade700;
-      case 'TARJETA':
-        return Colors.orange.shade800;
-      default:
-        return Colors.teal;
-    }
   }
 
   Widget _buildArqueoDiario(ArqueoDiario? arqueo) {
