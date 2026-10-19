@@ -33,6 +33,7 @@ abstract class InventoryRepository {
     required int quantity,
     String? sellerId,
     String? storeLocation,
+    double? unitPrice,
   });
   Future<Either<Failure, Unit>> revertOrAdjustStoreStock({
     String? lotId,

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
+import '../../../auth/domain/entities/user.dart';
+import '../../../auth/presentation/viewmodels/auth_viewmodel.dart';
 import '../../domain/entities/product.dart';
 import '../../domain/entities/lot.dart';
 import '../viewmodels/inventory_viewmodel.dart';
@@ -41,6 +44,18 @@ class _AddProductLotSheetState extends State<AddProductLotSheet> {
   }
 
   void _save() async {
+    final auth = context.read<AuthViewModel?>();
+    final isSeller = auth?.currentUser?.role == UserRole.seller || (auth?.isSeller ?? false);
+    if (isSeller) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Operación no permitida: el perfil vendedor no puede registrar nuevos productos.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     if (_formKey.currentState?.validate() ?? false) {
       _formKey.currentState?.save();
       setState(() {
@@ -71,7 +86,11 @@ class _AddProductLotSheetState extends State<AddProductLotSheet> {
         location: _location,
       );
 
-      final success = await widget.viewModel.createProductWithLot(newProduct, newLot);
+      final success = await widget.viewModel.createProductWithLot(
+        newProduct,
+        newLot,
+        userRole: isSeller ? 'seller' : 'admin',
+      );
       
       setState(() {
         _isSaving = false;

@@ -27,7 +27,7 @@ class TestRemoteSyncDataSource implements RemoteSyncDataSource {
   Stream<List<Map<String, dynamic>>> listenToRemoteProducts() => const Stream.empty();
 
   @override
-  Stream<List<Map<String, dynamic>>> listenToRemoteLots() => const Stream.empty();
+  Stream<List<Map<String, dynamic>>> listenToRemoteLots({String? location}) => const Stream.empty();
 
   @override
   Stream<List<Map<String, dynamic>>> listenToRemoteSales() => const Stream.empty();

@@ -63,7 +63,7 @@ class PosAdvancedFakeRemoteSyncDs implements RemoteSyncDataSource {
   Stream<List<Map<String, dynamic>>> listenToRemoteProducts() => productsController.stream;
 
   @override
-  Stream<List<Map<String, dynamic>>> listenToRemoteLots() => lotsController.stream;
+  Stream<List<Map<String, dynamic>>> listenToRemoteLots({String? location}) => lotsController.stream;
 
   @override
   Stream<List<Map<String, dynamic>>> listenToRemoteSales() => salesController.stream;

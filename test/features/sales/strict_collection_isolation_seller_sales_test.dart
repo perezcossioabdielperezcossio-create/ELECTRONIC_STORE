@@ -556,6 +556,7 @@ void main() {
 
       when(() => mockRemoteDs.listenToRemoteSales()).thenAnswer((_) => const Stream.empty());
       when(() => mockRemoteDs.listenToSellerSales(any())).thenAnswer((_) => const Stream.empty());
+      when(() => mockRemoteDs.listenToRemoteLots(location: any(named: 'location'))).thenAnswer((_) => const Stream.empty());
 
       final syncManager = SyncManager(localDataSource: syncLocalDs, remoteDataSource: mockRemoteDs);
 

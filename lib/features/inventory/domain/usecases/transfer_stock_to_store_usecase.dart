@@ -9,16 +9,18 @@ class TransferStockToStoreParams extends Equatable {
   final int quantity;
   final String? sellerId;
   final String? storeLocation;
+  final double? unitPrice;
 
   const TransferStockToStoreParams({
     required this.productId,
     required this.quantity,
     this.sellerId,
     this.storeLocation = 'TIENDA',
+    this.unitPrice,
   });
 
   @override
-  List<Object?> get props => [productId, quantity, sellerId, storeLocation];
+  List<Object?> get props => [productId, quantity, sellerId, storeLocation, unitPrice];
 }
 
 class TransferStockToStoreUseCase implements UseCase<Unit, TransferStockToStoreParams> {
@@ -36,6 +38,7 @@ class TransferStockToStoreUseCase implements UseCase<Unit, TransferStockToStoreP
       quantity: params.quantity,
       sellerId: params.sellerId,
       storeLocation: params.storeLocation,
+      unitPrice: params.unitPrice,
     );
   }
 }

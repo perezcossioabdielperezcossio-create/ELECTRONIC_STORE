@@ -44,6 +44,7 @@ class InventoryViewModel extends ChangeNotifier {
     this.revertOrAdjustStoreStockUseCase,
     this.syncManager,
   }) {
+    syncManager?.attachInventoryViewModel(this);
     _initSyncListener();
   }
 
@@ -55,6 +56,7 @@ class InventoryViewModel extends ChangeNotifier {
 
   @override
   void dispose() {
+    syncManager?.detachInventoryViewModel(this);
     _syncSubscription?.cancel();
     super.dispose();
   }
@@ -149,14 +151,19 @@ class InventoryViewModel extends ChangeNotifier {
     return result.isRight();
   }
 
-  Future<bool> createProductWithLot(Product product, Lot lot) async {
+  Future<bool> createProductWithLot(Product product, Lot lot, {String? userRole}) async {
+    if (userRole != null && userRole.toLowerCase().trim() == 'seller') {
+      _errorMessage = 'Operación no permitida: el perfil vendedor no puede registrar nuevos productos.';
+      notifyListeners();
+      return false;
+    }
     try {
-      await createProductWithLotUseCase(product: product, initialLot: lot);
+      await createProductWithLotUseCase(product: product, initialLot: lot, userRole: userRole);
       await loadProducts();
       syncManager?.syncPendingOperations();
       return true;
     } catch (e) {
-      _errorMessage = e.toString();
+      _errorMessage = e.toString().replaceAll('Exception: ', '').replaceAll('StateError: ', '').replaceAll('Bad state: ', '');
       notifyListeners();
       return false;
     }
@@ -216,6 +223,7 @@ class InventoryViewModel extends ChangeNotifier {
     required int quantity,
     String? sellerId,
     String? storeLocation,
+    double? unitPrice,
   }) async {
     if (transferStockToStoreUseCase == null) return false;
     final result = await transferStockToStoreUseCase!(
@@ -224,6 +232,7 @@ class InventoryViewModel extends ChangeNotifier {
         quantity: quantity,
         sellerId: sellerId,
         storeLocation: storeLocation,
+        unitPrice: unitPrice,
       ),
     );
 

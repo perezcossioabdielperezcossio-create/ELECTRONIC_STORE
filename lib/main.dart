@@ -100,6 +100,7 @@ void main() async {
   final syncManager = SyncManager(
     localDataSource: syncLocalDs, 
     remoteDataSource: remoteSyncDs,
+    firestore: FirebaseFirestore.instance,
   )..startRealtimeSync();
   
   // CRM / Clients
@@ -124,7 +125,7 @@ void main() async {
   
   // Inventory
   final db = await dbHelper.database;
-  final invLocalDs = InventoryLocalDataSourceImpl(db);
+  final invLocalDs = InventoryLocalDataSourceImpl(db, firestore: FirebaseFirestore.instance);
   final invRepo = InventoryRepositoryImpl(invLocalDs);
   final getAllProducts = GetAllProducts(invRepo);
   final addLotUseCase = AddLotUseCase(invRepo);

@@ -17,18 +17,18 @@ class LotModel extends Lot {
     final productId = (map['product_id'] ?? map['productId'] ?? map['productSku'] ?? '') as String;
     
     DateTime purchaseDate;
-    final dateVal = map['purchase_date'] ?? map['purchaseDate'] ?? map['fecha_ingreso'] ?? map['fechaIngreso'];
+    final dateVal = map['purchase_date'] ?? map['purchaseDate'] ?? map['fecha_ingreso'] ?? map['fechaIngreso'] ?? map['updated_at'];
     if (dateVal is String) {
       purchaseDate = DateTime.tryParse(dateVal) ?? DateTime.now();
     } else {
       purchaseDate = DateTime.now();
     }
 
-    final currentQty = ((map['current_quantity'] ?? map['currentQuantity'] ?? map['cantidad_actual'] ?? map['cantidadActual'] ?? 0) as num).toInt();
-    final initialQty = ((map['initial_quantity'] ?? map['initialQuantity'] ?? map['cantidad_inicial'] ?? map['cantidadInicial'] ?? currentQty) as num).toInt();
-    final realCost = ((map['real_unit_cost'] ?? map['realUnitCost'] ?? map['costo_unitario_real'] ?? map['costoUnitarioReal'] ?? 0.0) as num).toDouble();
+    final currentQty = ((map['current_quantity'] ?? map['currentQuantity'] ?? map['cantidad_actual'] ?? map['cantidadActual'] ?? map['current_qty'] ?? 0) as num).toInt();
+    final initialQty = ((map['initial_quantity'] ?? map['initialQuantity'] ?? map['cantidad_inicial'] ?? map['cantidadInicial'] ?? map['initial_qty'] ?? currentQty) as num).toInt();
+    final realCost = ((map['real_unit_cost'] ?? map['realUnitCost'] ?? map['costo_unitario_real'] ?? map['costoUnitarioReal'] ?? map['unit_cost'] ?? 0.0) as num).toDouble();
     
-    final basePriceVal = map['promoter_base_price'] ?? map['promoterBasePrice'] ?? map['precio_base_promotor'];
+    final basePriceVal = map['promoter_base_price'] ?? map['promoterBasePrice'] ?? map['precio_base_promotor'] ?? map['unit_price'] ?? map['precio_unitario'];
     final promoterBasePrice = basePriceVal != null ? (basePriceVal as num).toDouble() : null;
 
     final locationRaw = (map['location'] ?? map['ubicacion'] ?? 'ALMACEN').toString().toUpperCase().trim();
@@ -61,6 +61,7 @@ class LotModel extends Lot {
   }
 
   Map<String, dynamic> toMap() {
+    final nowIso = DateTime.now().toIso8601String();
     return {
       'id': id,
       'product_id': productId,
@@ -72,11 +73,15 @@ class LotModel extends Lot {
       'cantidad_inicial': initialQuantity,
       'current_quantity': currentQuantity,
       'cantidad_actual': currentQuantity,
+      'current_qty': currentQuantity,
       'real_unit_cost': realUnitCost,
       'costo_unitario_real': realUnitCost,
+      'unit_cost': realUnitCost,
       'promoter_base_price': promoterBasePrice,
+      'unit_price': promoterBasePrice,
       'location': location,
       'ubicacion': location,
+      'updated_at': nowIso,
       'is_active': isActive ? 1 : 0,
     };
   }

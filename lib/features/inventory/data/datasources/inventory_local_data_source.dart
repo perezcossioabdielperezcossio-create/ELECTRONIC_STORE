@@ -1,9 +1,12 @@
 import 'dart:convert';
 import 'package:uuid/uuid.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import '../models/lot_model.dart';
 import '../models/product_model.dart';
-
+import 'inventory_remote_data_source.dart';
 
 abstract class InventoryLocalDataSource {
   Future<void> saveProductWithInitialLot(ProductModel product, LotModel initialLot);
@@ -21,6 +24,7 @@ abstract class InventoryLocalDataSource {
     required int quantity,
     String? sellerId,
     String? storeLocation,
+    double? unitPrice,
   });
   Future<void> revertOrAdjustStoreStock({
     String? lotId,
@@ -31,8 +35,27 @@ abstract class InventoryLocalDataSource {
 
 class InventoryLocalDataSourceImpl implements InventoryLocalDataSource {
   final Database database;
+  final FirebaseFirestore? firestore;
+  final InventoryRemoteDataSource? inventoryRemoteDataSource;
 
-  InventoryLocalDataSourceImpl(this.database);
+  InventoryLocalDataSourceImpl(
+    this.database, {
+    this.firestore,
+    this.inventoryRemoteDataSource,
+  });
+
+  InventoryRemoteDataSource? get _effectiveRemoteDataSource {
+    if (inventoryRemoteDataSource != null) return inventoryRemoteDataSource;
+    if (firestore != null) {
+      return FirestoreInventoryRemoteDataSource(firestore: firestore!);
+    }
+    try {
+      if (Firebase.apps.isNotEmpty) {
+        return FirestoreInventoryRemoteDataSource(firestore: FirebaseFirestore.instance);
+      }
+    } catch (_) {}
+    return null;
+  }
 
   @override
   Future<void> saveProductWithInitialLot(ProductModel product, LotModel initialLot) async {
@@ -407,6 +430,7 @@ class InventoryLocalDataSourceImpl implements InventoryLocalDataSource {
     required int quantity,
     String? sellerId,
     String? storeLocation,
+    double? unitPrice,
   }) async {
     if (quantity <= 0) {
       throw Exception('La cantidad a transferir debe ser mayor a 0');
@@ -415,6 +439,8 @@ class InventoryLocalDataSourceImpl implements InventoryLocalDataSource {
     final locationDestino = (storeLocation != null && storeLocation.isNotEmpty)
         ? storeLocation.toUpperCase().trim()
         : 'TIENDA';
+
+    final remoteOps = <_LotTransferRemoteOp>[];
 
     await database.transaction((txn) async {
       final maps = await txn.query(
@@ -425,7 +451,7 @@ class InventoryLocalDataSourceImpl implements InventoryLocalDataSource {
       );
 
       final warehouseLots = maps.map((m) => LotModel.fromMap(m)).toList();
-      final totalWarehouseStock = warehouseLots.fold<int>(0, (sum, l) => sum + l.currentQuantity);
+      final totalWarehouseStock = warehouseLots.fold<int>(0, (totalStock, l) => totalStock + l.currentQuantity);
 
       if (totalWarehouseStock < quantity) {
         throw Exception('Stock insuficiente en Almacén Central (Disponible: $totalWarehouseStock, Requerido: $quantity)');
@@ -433,58 +459,73 @@ class InventoryLocalDataSourceImpl implements InventoryLocalDataSource {
 
       final prodQuery = await txn.query('products', where: 'id = ?', whereArgs: [productId], limit: 1);
       final sku = prodQuery.isNotEmpty ? (prodQuery.first['sku'] as String) : productId;
+      final prodStandardPrice = prodQuery.isNotEmpty ? ((prodQuery.first['standard_selling_price'] as num?)?.toDouble() ?? 0.0) : 0.0;
 
       var remaining = quantity;
       for (final lot in warehouseLots) {
         if (remaining <= 0) break;
         final take = lot.currentQuantity < remaining ? lot.currentQuantity : remaining;
         final newAlmQty = lot.currentQuantity - take;
+        final nowIso = DateTime.now().toIso8601String();
 
         await txn.update(
           'lots',
-          {'current_quantity': newAlmQty},
+          {'current_quantity': newAlmQty, 'is_active': newAlmQty > 0 ? 1 : 0},
           where: 'id = ?',
           whereArgs: [lot.id],
         );
+
+        final almacenUpdatePayload = {
+          'id': lot.id,
+          'current_quantity': newAlmQty,
+          'current_qty': newAlmQty,
+          'is_active': newAlmQty > 0 ? 1 : 0,
+          'updated_at': nowIso,
+        };
 
         await txn.insert('sync_queue', {
           'id': const Uuid().v4(),
           'table_name': 'lots',
           'operation': 'UPDATE',
-          'payload': jsonEncode({'id': lot.id, 'current_quantity': newAlmQty}),
+          'payload': jsonEncode(almacenUpdatePayload),
           'created_at': DateTime.now().toUtc().toIso8601String(),
           'status': 'PENDING',
           'retry_count': 0,
         });
 
+        final tiendaLotId = const Uuid().v4();
+        final costoCompraMayorista = lot.realUnitCost;
+        final precioVentaAsignado = unitPrice ?? lot.promoterBasePrice ?? prodStandardPrice;
+
         final storeLot = LotModel(
-          id: const Uuid().v4(),
+          id: tiendaLotId,
           productId: productId,
           purchaseDate: DateTime.now().toUtc(),
           initialQuantity: take,
           currentQuantity: take,
-          realUnitCost: lot.realUnitCost,
-          promoterBasePrice: lot.promoterBasePrice,
+          realUnitCost: costoCompraMayorista,
+          promoterBasePrice: precioVentaAsignado,
           location: locationDestino,
         );
 
-        final lotPayload = {
-          'id': storeLot.id,
-          'product_id': productId,
-          'productSku': sku,
-          'productId': productId,
-          'costo_unitario_real': storeLot.realUnitCost,
-          'real_unit_cost': storeLot.realUnitCost,
-          'cantidad_actual': storeLot.currentQuantity,
-          'current_quantity': storeLot.currentQuantity,
-          'cantidad_inicial': storeLot.initialQuantity,
-          'initial_quantity': storeLot.initialQuantity,
-          'fecha_ingreso': storeLot.purchaseDate.toIso8601String(),
-          'purchase_date': storeLot.purchaseDate.toIso8601String(),
-          'location': storeLot.location,
-          'ubicacion': storeLot.location,
-          if (storeLot.promoterBasePrice != null) 'promoter_base_price': storeLot.promoterBasePrice,
-          'is_active': 1,
+        final tiendaLotPayload = {
+          "id": tiendaLotId,
+          "product_id": productId,
+          "location": locationDestino,
+          "current_qty": take,
+          "unit_cost": costoCompraMayorista,
+          "unit_price": precioVentaAsignado,
+          "updated_at": nowIso,
+          "productSku": sku,
+          "productId": productId,
+          "current_quantity": take,
+          "initial_quantity": take,
+          "real_unit_cost": costoCompraMayorista,
+          "costo_unitario_real": costoCompraMayorista,
+          "promoter_base_price": precioVentaAsignado,
+          "promoterBasePrice": precioVentaAsignado,
+          "purchase_date": nowIso,
+          "is_active": 1,
         };
 
         await txn.insert(
@@ -497,15 +538,41 @@ class InventoryLocalDataSourceImpl implements InventoryLocalDataSource {
           'id': const Uuid().v4(),
           'table_name': 'lots',
           'operation': 'CREATE',
-          'payload': jsonEncode(lotPayload),
+          'payload': jsonEncode(tiendaLotPayload),
           'created_at': DateTime.now().toUtc().toIso8601String(),
           'status': 'PENDING',
           'retry_count': 0,
         });
 
+        remoteOps.add(_LotTransferRemoteOp(
+          almacenLotId: lot.id,
+          almacenNewQty: newAlmQty,
+          tiendaLotPayload: tiendaLotPayload,
+        ));
+
         remaining -= take;
       }
     });
+
+    final remoteDs = _effectiveRemoteDataSource;
+    if (remoteDs != null) {
+      for (final op in remoteOps) {
+        try {
+          await remoteDs.updateWarehouseLotStock(
+            lotId: op.almacenLotId,
+            newQuantity: op.almacenNewQty,
+          );
+        } catch (e) {
+          debugPrint('Immediate Firestore update for warehouse lot ${op.almacenLotId} deferred to sync_queue: $e');
+        }
+
+        try {
+          await remoteDs.createOrUpdateStoreLot(op.tiendaLotPayload);
+        } catch (e) {
+          debugPrint('Immediate Firestore create for store lot ${op.tiendaLotPayload['id']} deferred to sync_queue: $e');
+        }
+      }
+    }
   }
 
   @override
@@ -772,4 +839,17 @@ class InventoryLocalDataSourceImpl implements InventoryLocalDataSource {
     }
   }
 }
+
+class _LotTransferRemoteOp {
+  final String almacenLotId;
+  final int almacenNewQty;
+  final Map<String, dynamic> tiendaLotPayload;
+
+  _LotTransferRemoteOp({
+    required this.almacenLotId,
+    required this.almacenNewQty,
+    required this.tiendaLotPayload,
+  });
+}
+
 

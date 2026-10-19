@@ -21,7 +21,11 @@ class CreateProductWithLotUseCase {
   Future<void> call({
     required Product product,
     required Lot initialLot,
+    String? userRole,
   }) async {
+    if (userRole != null && userRole.toLowerCase().trim() == 'seller') {
+      throw StateError('Operación no permitida: el perfil vendedor no puede registrar nuevos productos.');
+    }
     // Validate RF-01: Check if a product with the same SKU already exists
     final existingProduct = await repository.getProductBySku(product.sku);
     if (existingProduct != null) {

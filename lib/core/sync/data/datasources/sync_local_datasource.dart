@@ -232,12 +232,22 @@ class SyncLocalDataSourceImpl implements SyncLocalDataSource {
       map,
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+    try {
+      await db.insert(
+        'lotes',
+        map,
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    } catch (_) {}
   }
 
   @override
   Future<void> deleteLot(String id) async {
     final db = await dbHelper.database;
     await db.delete('lots', where: 'id = ?', whereArgs: [id]);
+    try {
+      await db.delete('lotes', where: 'id = ?', whereArgs: [id]);
+    } catch (_) {}
   }
 
   @override

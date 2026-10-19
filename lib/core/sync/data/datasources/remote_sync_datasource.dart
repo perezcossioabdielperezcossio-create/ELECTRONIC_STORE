@@ -18,7 +18,7 @@ class SyncResult {
 abstract class RemoteSyncDataSource {
   Future<SyncResult> syncOperation(SyncOperationModel operation);
   Stream<List<Map<String, dynamic>>> listenToRemoteProducts();
-  Stream<List<Map<String, dynamic>>> listenToRemoteLots();
+  Stream<List<Map<String, dynamic>>> listenToRemoteLots({String? location});
   Stream<List<Map<String, dynamic>>> listenToRemoteSales();
   Stream<List<Map<String, dynamic>>> listenToRemoteClients();
   Stream<List<Map<String, dynamic>>> listenToRemoteDeliveries();
@@ -43,7 +43,7 @@ class MockRemoteSyncDataSource implements RemoteSyncDataSource {
   Stream<List<Map<String, dynamic>>> listenToRemoteProducts() => const Stream.empty();
 
   @override
-  Stream<List<Map<String, dynamic>>> listenToRemoteLots() => const Stream.empty();
+  Stream<List<Map<String, dynamic>>> listenToRemoteLots({String? location}) => const Stream.empty();
 
   @override
   Stream<List<Map<String, dynamic>>> listenToRemoteSales() => const Stream.empty();

@@ -53,7 +53,11 @@ class FirestoreRemoteDataSource implements RemoteSyncDataSource {
           await firestore.collection('lots').doc(lotId).delete();
         } else if (operation.operation == 'UPDATE') {
           final lotId = (payloadMap['id'] as String?) ?? operation.id;
-          await firestore.collection('lots').doc(lotId).set(payloadMap, SetOptions(merge: true));
+          try {
+            await firestore.collection('lots').doc(lotId).update(payloadMap);
+          } catch (_) {
+            await firestore.collection('lots').doc(lotId).set(payloadMap, SetOptions(merge: true));
+          }
         } else {
           final lot = LotModel.fromMap(payloadMap);
           await pushLot(lot, operation.operation, payloadMap);
@@ -223,8 +227,10 @@ class FirestoreRemoteDataSource implements RemoteSyncDataSource {
       mapToSet['productSku'] = mapToSet['productSku'] ?? lot.productId;
       mapToSet['costo_unitario_real'] = lot.realUnitCost;
       mapToSet['real_unit_cost'] = lot.realUnitCost;
+      mapToSet['unit_cost'] = mapToSet['unit_cost'] ?? lot.realUnitCost;
       mapToSet['cantidad_actual'] = lot.currentQuantity;
       mapToSet['current_quantity'] = lot.currentQuantity;
+      mapToSet['current_qty'] = mapToSet['current_qty'] ?? lot.currentQuantity;
       mapToSet['cantidad_inicial'] = lot.initialQuantity;
       mapToSet['initial_quantity'] = lot.initialQuantity;
       mapToSet['fecha_ingreso'] = lot.purchaseDate.toIso8601String();
@@ -232,9 +238,11 @@ class FirestoreRemoteDataSource implements RemoteSyncDataSource {
       if (lot.promoterBasePrice != null) {
         mapToSet['promoter_base_price'] = lot.promoterBasePrice;
         mapToSet['promoterBasePrice'] = lot.promoterBasePrice;
+        mapToSet['unit_price'] = mapToSet['unit_price'] ?? lot.promoterBasePrice;
       }
       mapToSet['location'] = lot.location;
       mapToSet['ubicacion'] = lot.location;
+      mapToSet['updated_at'] = mapToSet['updated_at'] ?? DateTime.now().toIso8601String();
       mapToSet['is_active'] = lot.isActive ? 1 : 0;
       await docRef.set(mapToSet, SetOptions(merge: true));
     }
@@ -290,8 +298,12 @@ class FirestoreRemoteDataSource implements RemoteSyncDataSource {
 
   /// Listen to remote changes for Lots
   @override
-  Stream<List<Map<String, dynamic>>> listenToRemoteLots() {
-    return firestore.collection('lots').snapshots().map((snapshot) {
+  Stream<List<Map<String, dynamic>>> listenToRemoteLots({String? location}) {
+    Query<Map<String, dynamic>> query = firestore.collection('lots');
+    if (location != null && location.isNotEmpty) {
+      query = query.where('location', isEqualTo: location);
+    }
+    return query.snapshots().map((snapshot) {
       return snapshot.docs.map((doc) {
         final data = Map<String, dynamic>.from(doc.data());
         data['id'] ??= doc.id;

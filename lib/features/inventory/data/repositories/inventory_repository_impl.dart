@@ -115,6 +115,7 @@ class InventoryRepositoryImpl implements InventoryRepository {
     required int quantity,
     String? sellerId,
     String? storeLocation,
+    double? unitPrice,
   }) async {
     try {
       await localDataSource.transferStockToStore(
@@ -122,6 +123,7 @@ class InventoryRepositoryImpl implements InventoryRepository {
         quantity: quantity,
         sellerId: sellerId,
         storeLocation: storeLocation,
+        unitPrice: unitPrice,
       );
       return const Right(unit);
     } catch (e) {

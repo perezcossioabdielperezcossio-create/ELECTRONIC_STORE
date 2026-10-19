@@ -1,10 +1,15 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:firebase_core/firebase_core.dart';
 import '../../data/datasources/sync_local_datasource.dart';
 import '../../data/datasources/remote_sync_datasource.dart';
+import '../../data/datasources/firestore_remote_data_source.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../../core/database/database_helper.dart';
+import '../../../../features/inventory/data/datasources/inventory_remote_data_source.dart';
+import '../../../../features/inventory/presentation/viewmodels/inventory_viewmodel.dart';
+import '../../../../features/inventory/data/models/lot_model.dart';
 
 class SyncCompletedEvent {
   final String table;
@@ -15,10 +20,15 @@ class SyncCompletedEvent {
 class SyncManager extends ChangeNotifier {
   final SyncLocalDataSource localDataSource;
   final RemoteSyncDataSource remoteDataSource;
+  final FirebaseFirestore? firestore;
+  final InventoryRemoteDataSource? inventoryRemoteDataSource;
+  InventoryViewModel? inventoryViewModel;
+
   final Connectivity _connectivity = Connectivity();
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   StreamSubscription<List<Map<String, dynamic>>>? _remoteProductsSubscription;
   StreamSubscription<List<Map<String, dynamic>>>? _remoteLotsSubscription;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _remoteLotsSnapshotsSubscription;
   StreamSubscription<List<Map<String, dynamic>>>? _remoteSalesSubscription;
   StreamSubscription<List<Map<String, dynamic>>>? _remoteClientsSubscription;
   StreamSubscription<List<Map<String, dynamic>>>? _remoteDeliveriesSubscription;
@@ -42,9 +52,44 @@ class SyncManager extends ChangeNotifier {
   SyncManager({
     required this.localDataSource,
     required this.remoteDataSource,
+    this.firestore,
+    this.inventoryRemoteDataSource,
+    this.inventoryViewModel,
   }) {
     _initConnectivity();
     _refreshPendingCount();
+  }
+
+  void attachInventoryViewModel(InventoryViewModel vm) {
+    inventoryViewModel = vm;
+  }
+
+  void detachInventoryViewModel(InventoryViewModel vm) {
+    if (inventoryViewModel == vm) {
+      inventoryViewModel = null;
+    }
+  }
+
+  FirebaseFirestore? get _effectiveFirestore {
+    if (firestore != null) return firestore;
+    if (remoteDataSource is FirestoreRemoteDataSource) {
+      return (remoteDataSource as FirestoreRemoteDataSource).firestore;
+    }
+    try {
+      if (Firebase.apps.isNotEmpty) {
+        return FirebaseFirestore.instance;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  InventoryRemoteDataSource? get _effectiveInventoryRemoteDataSource {
+    if (inventoryRemoteDataSource != null) return inventoryRemoteDataSource;
+    final fs = _effectiveFirestore;
+    if (fs != null) {
+      return FirestoreInventoryRemoteDataSource(firestore: fs);
+    }
+    return null;
   }
 
   /// Configures real-time synchronization according to the logged-in user role
@@ -52,6 +97,67 @@ class SyncManager extends ChangeNotifier {
     _currentUserRole = role.toLowerCase().trim();
     _currentUserCelular = celular.trim();
     _configureRoleSalesSubscription();
+    _configureRoleLotsSubscription();
+  }
+
+  void _configureRoleLotsSubscription() {
+    _remoteLotsSubscription?.cancel();
+    _remoteLotsSubscription = null;
+    _remoteLotsSnapshotsSubscription?.cancel();
+    _remoteLotsSnapshotsSubscription = null;
+
+    final isSeller = _currentUserRole == 'seller';
+    final invRemoteDs = _effectiveInventoryRemoteDataSource;
+
+    if (invRemoteDs != null) {
+      // Inicia suscripción reactiva a FirebaseFirestore.instance.collection('lots').snapshots():
+      // Para Admin: Escucha todos los documentos de lots.
+      // Para Seller: Escucha con filtro where('location', isEqualTo: 'TIENDA').
+      _remoteLotsSnapshotsSubscription = invRemoteDs
+          .subscribeToLots(location: isSeller ? 'TIENDA' : null)
+          .listen((snapshot) async {
+        for (final change in snapshot.docChanges) {
+          final doc = change.doc;
+          final docId = doc.id;
+          final data = doc.data();
+
+          if (change.type == DocumentChangeType.removed) {
+            await localDataSource.deleteLot(docId);
+          } else if (data != null) {
+            data['id'] ??= docId;
+            final lotModel = LotModel.fromMap(data);
+            await localDataSource.insertOrUpdateLot(lotModel);
+          }
+        }
+
+        _remoteDataChangedController.add(null);
+        _syncEventsController.add(const SyncCompletedEvent('lots'));
+        if (inventoryViewModel != null) {
+          await inventoryViewModel!.loadProducts();
+          inventoryViewModel!.notifyListeners();
+        }
+        notifyListeners();
+      }, onError: (e) {
+        debugPrint('SyncManager lots snapshot error: $e');
+      });
+    } else {
+      // Fallback a RemoteSyncDataSource para tests sin Firestore activo
+      try {
+        final stream = remoteDataSource.listenToRemoteLots(location: isSeller ? 'TIENDA' : null);
+        _remoteLotsSubscription = stream.listen((lots) async {
+          await localDataSource.syncLots(lots);
+          _remoteDataChangedController.add(null);
+          _syncEventsController.add(const SyncCompletedEvent('lots'));
+          if (inventoryViewModel != null) {
+            await inventoryViewModel!.loadProducts();
+            inventoryViewModel!.notifyListeners();
+          }
+          notifyListeners();
+        });
+      } catch (e) {
+        debugPrint('SyncManager fallback lots subscription not initialized or not mocked: $e');
+      }
+    }
   }
 
   void _configureRoleSalesSubscription() {
@@ -86,7 +192,6 @@ class SyncManager extends ChangeNotifier {
   /// Start real-time Firestore listeners (Live 2-Device Sync)
   void startRealtimeSync() {
     _remoteProductsSubscription?.cancel();
-    _remoteLotsSubscription?.cancel();
     _remoteClientsSubscription?.cancel();
     _remoteDeliveriesSubscription?.cancel();
     _remoteUsersSubscription?.cancel();
@@ -98,12 +203,7 @@ class SyncManager extends ChangeNotifier {
       notifyListeners();
     });
 
-    _remoteLotsSubscription = remoteDataSource.listenToRemoteLots().listen((lots) async {
-      await localDataSource.syncLots(lots);
-      _remoteDataChangedController.add(null);
-      _syncEventsController.add(const SyncCompletedEvent('lots'));
-      notifyListeners();
-    });
+    _configureRoleLotsSubscription();
 
     _remoteClientsSubscription = remoteDataSource.listenToRemoteClients().listen((clients) async {
       await localDataSource.syncClients(clients);
@@ -167,6 +267,7 @@ class SyncManager extends ChangeNotifier {
     _connectivitySubscription?.cancel();
     _remoteProductsSubscription?.cancel();
     _remoteLotsSubscription?.cancel();
+    _remoteLotsSnapshotsSubscription?.cancel();
     _remoteSalesSubscription?.cancel();
     _remoteSellerSalesSubscription?.cancel();
     _remoteClientsSubscription?.cancel();
