@@ -188,14 +188,15 @@ class SyncManager extends ChangeNotifier {
       });
     }
   }
-
   /// Start real-time Firestore listeners (Live 2-Device Sync)
   void startRealtimeSync() {
+    // Cancel previous subscriptions if any
     _remoteProductsSubscription?.cancel();
     _remoteClientsSubscription?.cancel();
     _remoteDeliveriesSubscription?.cancel();
     _remoteUsersSubscription?.cancel();
 
+    // Listen to products
     _remoteProductsSubscription = remoteDataSource.listenToRemoteProducts().listen((products) async {
       await localDataSource.syncProducts(products);
       _remoteDataChangedController.add(null);
@@ -203,8 +204,10 @@ class SyncManager extends ChangeNotifier {
       notifyListeners();
     });
 
+    // Set up lots subscription based on user role
     _configureRoleLotsSubscription();
 
+    // Listen to clients
     _remoteClientsSubscription = remoteDataSource.listenToRemoteClients().listen((clients) async {
       await localDataSource.syncClients(clients);
       _remoteDataChangedController.add(null);
@@ -212,6 +215,7 @@ class SyncManager extends ChangeNotifier {
       notifyListeners();
     });
 
+    // Listen to deliveries
     _remoteDeliveriesSubscription = remoteDataSource.listenToRemoteDeliveries().listen((deliveries) async {
       await localDataSource.syncDeliveries(deliveries);
       _remoteDataChangedController.add(null);
@@ -219,6 +223,7 @@ class SyncManager extends ChangeNotifier {
       notifyListeners();
     });
 
+    // Listen to users
     _remoteUsersSubscription = remoteDataSource.listenToRemoteUsers().listen((users) async {
       await localDataSource.syncUsers(users);
       _remoteDataChangedController.add(null);
@@ -226,9 +231,24 @@ class SyncManager extends ChangeNotifier {
       notifyListeners();
     });
 
+    // Sales subscription based on role
     _configureRoleSalesSubscription();
 
+    // Initial pending sync
     syncPendingOperations();
+  }
+
+  /// Starts only the real‑time synchronization for store lots.
+  /// This method is useful when the UI needs to react to changes in the `lots`
+  /// collection (e.g., inventory updates) without re‑initialising the other
+  /// listeners. It cancels any existing lots subscriptions and then (re)sets up
+  /// the role‑based subscription that handles added, modified and removed
+  /// documents, persisting them to SQLite via `localDataSource` and notifying
+  /// the attached `InventoryViewModel`.
+  void startRealtimeLotsSync() {
+    _remoteLotsSubscription?.cancel();
+    _remoteLotsSnapshotsSubscription?.cancel();
+    _configureRoleLotsSubscription();
   }
 
   /// Consulta bajo demanda de seller_sales para el Administrador (ej. Auditoría de Tiendas)
